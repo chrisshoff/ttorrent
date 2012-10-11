@@ -297,7 +297,8 @@ public class SharedTorrent extends Torrent implements PeerActivityListener {
 	 */
 	public synchronized void init() throws InterruptedException, IOException {
 		if (this.isInitialized()) {
-			throw new IllegalStateException("Torrent was already initialized!");
+			logger.info("Torrent was already initialized!");
+			return;
 		}
 		
 		if (multiThreadHash) {
@@ -794,7 +795,7 @@ public class SharedTorrent extends Torrent implements PeerActivityListener {
 			this.markCompleted(piece);
 		} else {
 			// When invalid, remark that piece as non-requested.
-			logger.warn("Downloaded piece {} was not valid ;-(", piece);
+			// logger.warn("Downloaded piece {} was not valid ;-(", piece);
 		}
 
 		logger.trace("We now have {} piece(s) and {} outstanding request(s): {}.",

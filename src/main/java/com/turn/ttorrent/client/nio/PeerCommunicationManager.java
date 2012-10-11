@@ -30,22 +30,23 @@ public class PeerCommunicationManager extends Thread {
 	
 	public static final int PORT_RANGE_START = 6881;
 	public static final int PORT_RANGE_END = 6889;
-	private static int DEFAULT_BUFFER_SIZE = 512;
 	
 	Selector selector; // Main selector that handles all requests
 	ServerSocketChannel serverSocketChannel;
 	InetSocketAddress address;
 	List<ChangeRequest> changeRequests = new LinkedList<ChangeRequest>();
 	List<CommunicationListener> listeners = new ArrayList<CommunicationListener>();
+	ByteBuffer stagingBuffer = ByteBuffer.allocate(8192);
+	ReadWorker readWorker;
 	
 	private Map pendingData = new HashMap();
-	private final Map<SelectionKey, ByteBuffer> readBuffers = new HashMap<SelectionKey, ByteBuffer>();
 	
 	public String id;
 	
 	public PeerCommunicationManager(InetAddress address, String id)
 			throws IOException {
 		this.id = id;
+		this.readWorker = new ReadWorker(id);
 		
 		// Bind to the first available port in the range
 		// [PORT_RANGE_START; PORT_RANGE_END].
@@ -83,15 +84,19 @@ public class PeerCommunicationManager extends Thread {
 				synchronized (this.changeRequests) {
 					Iterator changes = this.changeRequests.iterator();
 					while (changes.hasNext()) {
-						ChangeRequest change = (ChangeRequest) changes.next();
-						switch (change.type) {
-						case ChangeRequest.CHANGEOPS:
-							SelectionKey key = change.socket.keyFor(this.selector);
-							key.interestOps(change.ops);
-							break;
-						case ChangeRequest.REGISTER:
-							change.socket.register(this.selector, change.ops, change.additionalData);
-							break;
+						try {
+							ChangeRequest change = (ChangeRequest) changes.next();
+							switch (change.type) {
+							case ChangeRequest.CHANGEOPS:
+								SelectionKey key = change.socket.keyFor(this.selector);
+								key.interestOps(change.ops);
+								break;
+							case ChangeRequest.REGISTER:
+								change.socket.register(this.selector, change.ops, change.additionalData);
+								break;
+							}
+						} catch (NullPointerException e) {
+							logger.error("There was a problem handling the change request - the connection may have gone away.", e);
 						}
 					}
 					
@@ -177,16 +182,11 @@ public class PeerCommunicationManager extends Thread {
 	private void read(SelectionKey key) throws IOException {
 		SocketChannel socketChannel = (SocketChannel) key.channel();
 		
-		ByteBuffer readBuffer = readBuffers.get(key); 
-    	if (readBuffer==null) {
-    		// Create a read buffer for this key at the default buffer size
-    		readBuffer = ByteBuffer.allocate(DEFAULT_BUFFER_SIZE); 
-    		readBuffers.put(key, readBuffer); 
-    	}
+		this.stagingBuffer.clear();
     	
 		int numRead;
 		try {
-			numRead = socketChannel.read(readBuffer);
+			numRead = socketChannel.read(this.stagingBuffer);
 		} catch (IOException e) {
 			key.cancel();
 			socketChannel.close();
@@ -199,68 +199,8 @@ public class PeerCommunicationManager extends Thread {
 			return;
 		}
 		
-		readBuffer.flip();
-		List<ByteBuffer> result = new ArrayList<ByteBuffer>();
+		this.readWorker.processData(this, socketChannel, this.stagingBuffer.array(), numRead, key);
 		
-		// We read data from the socket, now see if we can parse one or more useful messages out of it
-		ByteBuffer msg = readMessage(key, readBuffer);
-		while (msg != null) {
-			result.add(msg);
-			msg = readMessage(key, readBuffer);
-		}
-		
-		// Call back to the listeners with the resulting messages
-		fireNewDataListeners(socketChannel, result);
-	}
-	
-	private ByteBuffer readMessage(SelectionKey key, ByteBuffer readBuffer) {
-		int bytesToRead;
-		
-		// The length of the expected length prefix
-		TwoByteMessageLength messageLength = new TwoByteMessageLength();
-		
-		// Need at least enough to read the message length
-		if (readBuffer.remaining() >= messageLength.byteLength()) {
-			byte[] lengthBytes = new byte[messageLength.byteLength()];
-			readBuffer.get(lengthBytes);
-			bytesToRead = (int)messageLength.bytesToLength(lengthBytes); // This is the message size
-			if (readBuffer.limit() - readBuffer.position() < bytesToRead) {
-				// Not enough data - prepare for writing again
-				if (readBuffer.limit() == readBuffer.capacity()) {
-					// Message may be longer than buffer => resize buffer to message size
-					int oldCapacity = readBuffer.capacity();
-					ByteBuffer tmp = ByteBuffer.allocate(bytesToRead+messageLength.byteLength());
-					readBuffer.position(0);
-					tmp.put(readBuffer);
-					readBuffer = tmp;
-					readBuffer.position(oldCapacity);
-					readBuffer.limit(readBuffer.capacity());
-					readBuffers.put(key, readBuffer);
-					return null;
-				} else {
-					// Reset for writing
-					readBuffer.position(readBuffer.limit());
-					readBuffer.limit(readBuffer.capacity());
-					return null;
-				}
-			}
-		} else {
-			// Not enough data - prepare for writing again
-			readBuffer.position(readBuffer.limit());
-			readBuffer.limit(readBuffer.capacity());
-			return null;
-		}
-		
-		byte[] resultMessage = new byte[bytesToRead];
-		readBuffer.get(resultMessage, 0, bytesToRead);
-		
-		// Remove read message from buffer
-		int remaining = readBuffer.remaining();
-		readBuffer.limit(readBuffer.capacity());
-		readBuffer.compact();
-		readBuffer.position(0);
-		readBuffer.limit(remaining);
-		return ByteBuffer.wrap(resultMessage);
 	}
 
 	private void accept(SelectionKey key) throws IOException {
@@ -294,7 +234,7 @@ public class PeerCommunicationManager extends Thread {
 		}
 	}
 	
-	private void fireNewDataListeners(SocketChannel socketChannel, List<ByteBuffer> data) {
+	public void fireNewDataListeners(SocketChannel socketChannel, List<ByteBuffer> data) {
 		for (CommunicationListener listener : this.listeners) {
 			listener.handleNewData(socketChannel, data);
 		}

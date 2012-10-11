@@ -1067,8 +1067,5 @@ public class Client extends Observable implements Runnable,
 	public void handleNewConnection(SocketChannel s, String hexInfoHash) { /* Do nothing */}
 
 	@Override
-	public void handleReturnedHandshake(SocketChannel s, List<ByteBuffer> data) { /* Do nothing */ }
-
-	@Override
 	public void handleNewData(SocketChannel s, List<ByteBuffer> data) { /* Do nothing */ }
 }

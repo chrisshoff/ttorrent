@@ -559,9 +559,9 @@ public class Torrent extends Observable {
 	 * @param createdBy The creator's name, or any string identifying the
 	 * torrent's creator.
 	 */
-	public static Torrent create(File source, URI announce, String createdBy)
+	public static Torrent create(File source, URI announce, String createdBy, boolean multiThreadHash)
 		throws NoSuchAlgorithmException, InterruptedException, IOException {
-		return Torrent.create(source, null, announce, createdBy);
+		return Torrent.create(source, null, announce, createdBy, multiThreadHash);
 	}
 
 	/**
@@ -582,7 +582,7 @@ public class Torrent extends Observable {
 	 * torrent's creator.
 	 */
 	public static Torrent create(File parent, List<File> files, URI announce,
-		String createdBy) throws NoSuchAlgorithmException,
+		String createdBy, boolean multiThreadHash) throws NoSuchAlgorithmException,
 		   InterruptedException, IOException {
 		if (files == null || files.isEmpty()) {
 			logger.info("Creating single-file torrent for {}...",
@@ -603,7 +603,7 @@ public class Torrent extends Observable {
 
 		if (files == null || files.isEmpty()) {
 			info.put("length", new BEValue(parent.length()));
-			info.put("pieces", new BEValue(Torrent.hashFile(parent),
+			info.put("pieces", new BEValue(Torrent.hashFile(parent, multiThreadHash),
 				Torrent.BYTE_ENCODING));
 		} else {
 			List<BEValue> fileInfo = new LinkedList<BEValue>();
@@ -679,9 +679,13 @@ public class Torrent extends Observable {
 	 *
 	 * @param file The file to hash.
 	 */
-	private static String hashFile(File file)
+	private static String hashFile(File file, boolean multiThreadHash)
 		throws NoSuchAlgorithmException, InterruptedException, IOException {
-		return Torrent.hashFiles(Arrays.asList(new File[] { file }));
+		if (multiThreadHash) {
+			return Torrent.hashFiles(Arrays.asList(new File[] { file }));
+		} else {
+			return Torrent.hashFilesSingleThread(Arrays.asList(new File[] { file }));
+		}
 	}
 
 	private static String hashFiles(List<File> files)
@@ -751,6 +755,62 @@ public class Torrent extends Observable {
 
 		return hashes.toString();
 	}
+	
+	private static String hashFilesSingleThread(List<File> files)
+			throws NoSuchAlgorithmException, InterruptedException, IOException {
+			List<String> results = new LinkedList<String>();
+			long length = 0L;
+
+			ByteBuffer buffer = ByteBuffer.allocate(Torrent.PIECE_LENGTH);
+
+			long start = System.nanoTime();
+			for (File file : files) {
+				logger.info("Analyzing local data for {} with {} threads...",
+					file.getName(), getHashingThreadsCount());
+
+				length += file.length();
+
+				FileInputStream fis = new FileInputStream(file);
+				FileChannel channel = fis.getChannel();
+
+				while (channel.read(buffer) > 0) {
+					if (buffer.remaining() == 0) {
+						buffer.clear();
+						results.add(new CallableChunkHasher(buffer).call());
+					}
+				}
+
+				channel.close();
+				fis.close();
+			}
+
+			// Hash the last bit, if any
+			if (buffer.position() > 0) {
+				buffer.limit(buffer.position());
+				buffer.position(0);
+				results.add(new CallableChunkHasher(buffer).call());
+			}
+
+			long elapsed = System.nanoTime() - start;
+
+			StringBuilder hashes = new StringBuilder();
+			for (String chunk : results) {
+				hashes.append(chunk);
+			}
+
+			int expectedPieces = (int) (Math.ceil(
+					(double)length / Torrent.PIECE_LENGTH));
+			logger.info("Hashed {} file(s) ({} bytes) in {} pieces ({} expected) in {}ms.",
+				new Object[] {
+					files.size(),
+					length,
+					results.size(),
+					expectedPieces,
+					String.format("%.1f", elapsed/1e6),
+				});
+
+			return hashes.toString();
+		}
 
 	/**
 	 * Torrent reader and creator.
@@ -803,9 +863,9 @@ public class Torrent extends Observable {
 				File[] files = source.listFiles();
 				Arrays.sort(files);
 				torrent = Torrent.create(source, Arrays.asList(files),
-					announce, creator);
+					announce, creator, true);
 			} else {
-				torrent = Torrent.create(source, announce, creator);
+				torrent = Torrent.create(source, announce, creator, true);
 			}
 
 			torrent.save(outfile);

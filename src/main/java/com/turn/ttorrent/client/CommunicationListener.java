@@ -32,8 +32,6 @@ public interface CommunicationListener extends EventListener {
 	
 	public void handleNewConnection(SocketChannel s, String hexInfoHash);
 	
-	public void handleReturnedHandshake(SocketChannel s, List<ByteBuffer> data);
-	
 	public void handleNewData(SocketChannel s, List<ByteBuffer> data);
 
 	public void handleFailedConnection(SharingPeer peer, Throwable cause);

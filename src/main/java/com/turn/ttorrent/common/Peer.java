@@ -39,6 +39,9 @@ public class Peer {
 
 	private ByteBuffer peerId;
 	private String hexPeerId;
+	
+	protected boolean server = false;
+	protected int serverCompletion = 0;
 
 	/**
 	 * Instantiate a new peer.
@@ -46,7 +49,10 @@ public class Peer {
 	 * @param address The peer's address, with port.
 	 */
 	public Peer(InetSocketAddress address) {
-		this(address, null);
+		this(address, false);
+	}
+	public Peer(InetSocketAddress address, boolean server) {
+		this(address, null, server);
 	}
 
 	/**
@@ -56,7 +62,10 @@ public class Peer {
 	 * @param port The peer's port.
 	 */
 	public Peer(String ip, int port) {
-		this(new InetSocketAddress(ip, port), null);
+		this(ip, port, false);
+	}
+	public Peer(String ip, int port, boolean server) {
+		this(new InetSocketAddress(ip, port), null, server);
 	}
 
 	/**
@@ -67,7 +76,10 @@ public class Peer {
 	 * @param peerId The byte-encoded peer ID.
 	 */
 	public Peer(String ip, int port, ByteBuffer peerId) {
-		this(new InetSocketAddress(ip, port), peerId);
+		this(ip, port, peerId, false);
+	}
+	public Peer(String ip, int port, ByteBuffer peerId, boolean server) {
+		this(new InetSocketAddress(ip, port), peerId, server);
 	}
 
 	/**
@@ -77,12 +89,16 @@ public class Peer {
 	 * @param peerId The byte-encoded peer ID.
 	 */
 	public Peer(InetSocketAddress address, ByteBuffer peerId) {
+		this(address, peerId, false);
+	}
+	public Peer(InetSocketAddress address, ByteBuffer peerId, boolean server) {
 		this.address = address;
 		this.hostId = String.format("%s:%d",
 			this.address.getAddress(),
 			this.address.getPort());
 
 		this.setPeerId(peerId);
+		this.server = server;
 	}
 
 	/**
@@ -164,6 +180,18 @@ public class Peer {
 		return this.address.getAddress().getAddress();
 	}
 
+	public boolean isServer() {
+		return server;
+	}
+	public void setServer(boolean server) {
+		this.server = server;
+	}
+	public int getServerCompletion() {
+		return serverCompletion;
+	}
+	public void setServerCompletion(int serverCompletion) {
+		this.serverCompletion = serverCompletion;
+	}
 	/**
 	 * Returns a human-readable representation of this peer.
 	 */

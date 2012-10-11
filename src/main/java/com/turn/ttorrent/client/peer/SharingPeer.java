@@ -634,6 +634,11 @@ public class SharingPeer extends Peer implements MessageListener {
 			case CANCEL:
 				// No need to support
 				break;
+			case SERVER:
+				// This is the main server, if interested.
+				this.server = true;
+				PeerMessage.ServerMessage serverMessage = (PeerMessage.ServerMessage)msg;
+				this.serverCompletion = serverMessage.getCompletion();
 		}
 	}
 

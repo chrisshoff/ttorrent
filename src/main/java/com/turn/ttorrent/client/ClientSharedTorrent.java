@@ -34,21 +34,36 @@ public class ClientSharedTorrent extends SharedTorrent {
 	private Random random;
 	private long seed;
 	private boolean stop;
+	private boolean server;
+	private String id;
+	private boolean serverShared;
 	
 	public ClientSharedTorrent(Torrent torrent, File destDir, boolean multiThreadHash)
 			throws FileNotFoundException, IOException, NoSuchAlgorithmException {
-		super(torrent, destDir, multiThreadHash);
-		this.peers = new ConcurrentHashMap<String, SharingPeer>();
-		this.connected = new ConcurrentHashMap<String, SharingPeer>();
-		this.random = new Random(System.currentTimeMillis());
+		this(torrent, destDir, multiThreadHash, false);
 	}
-
-	public ClientSharedTorrent(byte[] torrent, File destDir, boolean multiThreadHash)
+	
+	public ClientSharedTorrent(Torrent torrent, File destDir, boolean multiThreadHash, boolean server)
 			throws FileNotFoundException, IOException, NoSuchAlgorithmException {
 		super(torrent, destDir, multiThreadHash);
 		this.peers = new ConcurrentHashMap<String, SharingPeer>();
 		this.connected = new ConcurrentHashMap<String, SharingPeer>();
 		this.random = new Random(System.currentTimeMillis());
+		this.server = server;
+	}
+	
+	public ClientSharedTorrent(byte[] torrent, File destDir, boolean multiThreadHash)
+			throws FileNotFoundException, IOException, NoSuchAlgorithmException {
+		this(torrent, destDir, multiThreadHash, false);
+	}
+
+	public ClientSharedTorrent(byte[] torrent, File destDir, boolean multiThreadHash, boolean server)
+			throws FileNotFoundException, IOException, NoSuchAlgorithmException {
+		super(torrent, destDir, multiThreadHash);
+		this.peers = new ConcurrentHashMap<String, SharingPeer>();
+		this.connected = new ConcurrentHashMap<String, SharingPeer>();
+		this.random = new Random(System.currentTimeMillis());
+		this.server = server;
 	}
 	
 	/**
@@ -274,6 +289,9 @@ public class ClientSharedTorrent extends SharedTorrent {
 		for (SharingPeer peer : this.connected.values()) {
 			dl += peer.getDLRate().get();
 			ul += peer.getULRate().get();
+			if (peer.isServer()) {
+				peer.getTorrent().getCompletion();
+			}
 		}
 
 		logger.info("{} {}/{} pieces ({}%) [{}/{}] with {}/{} peers at {}/{} kB/s.",
@@ -361,5 +379,21 @@ public class ClientSharedTorrent extends SharedTorrent {
 		this.state = state;
 		this.notifyObservers(this.state);
 	}
+
+	public String getId() {
+		return id;
+	}
+
+	public void setId(String id) {
+		this.id = id;
+	}
+	
+	public boolean isServerShared() {
+		return serverShared;
+	}
+
+	public void setServerShared(boolean serverShared) {
+		this.serverShared = serverShared;
+	}	
 
 }

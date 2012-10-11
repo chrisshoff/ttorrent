@@ -51,20 +51,22 @@ public class MultiTorrentClient implements
 	
 	/** Peers unchoking frequency, in seconds. Current BitTorrent specification
 	 * recommends 10 seconds to avoid choking fibrilation. */
-	private static final int UNCHOKING_FREQUENCY = 3;
+	protected static final int UNCHOKING_FREQUENCY = 3;
 
 	/** Optimistic unchokes are done every 2 loop iterations, i.e. every
 	 * 2*UNCHOKING_FREQUENCY seconds. */
-	private static final int OPTIMISTIC_UNCHOKE_ITERATIONS = 3;
+	protected static final int OPTIMISTIC_UNCHOKE_ITERATIONS = 3;
 	
-	private static final int RATE_COMPUTATION_ITERATIONS = 2;
+	protected static final int RATE_COMPUTATION_ITERATIONS = 2;
 	public static final int MAX_DOWNLOADERS_UNCHOKE = 4;
 	private static final int VOLUNTARY_OUTBOUND_CONNECTIONS = 20;
 	
-	private PeerCommunicationManager service;
-	private MultiTorrentAnnounce announce;
-	private Peer self;
+	protected PeerCommunicationManager service;
+	protected MultiTorrentAnnounce announce;
+	protected Peer self;
 	private String id;
+	protected boolean stop = false;
+	protected boolean server;
 	
 	// Map of socket channels to torrents and peers. This allows us to quickly determine what peers we are talking to
 	// when a connection is being created and managed.
@@ -73,14 +75,24 @@ public class MultiTorrentClient implements
 	Thread thread;
 	
 	// List of all torrents this client is currently sharing/downloading
-	private ConcurrentMap<String, ClientSharedTorrent> torrents = new ConcurrentHashMap<String, ClientSharedTorrent>();
+	protected ConcurrentMap<String, ClientSharedTorrent> torrents = new ConcurrentHashMap<String, ClientSharedTorrent>();
 	
 	public MultiTorrentClient(InetAddress address) 
 			throws UnknownHostException, IOException {	
-		this(address, address);	
+		this(address, false);	
+	}
+	
+	public MultiTorrentClient(InetAddress address, boolean server) 
+			throws UnknownHostException, IOException {	
+		this(address, address, server);	
 	}
 	
 	public MultiTorrentClient(InetAddress localAddress, InetAddress publicAddress)
+			throws UnknownHostException, IOException {
+		this(localAddress, publicAddress, false);
+	}
+	
+	public MultiTorrentClient(InetAddress localAddress, InetAddress publicAddress, boolean server)
 			throws UnknownHostException, IOException {
 		
 		this.id = MultiTorrentClient.BITTORRENT_ID_PREFIX + UUID.randomUUID()
@@ -94,12 +106,14 @@ public class MultiTorrentClient implements
 		this.self = new Peer(
 			publicAddress.getHostAddress(),
 			(short)this.service.getAddress().getPort(),
-			ByteBuffer.wrap(id.getBytes(Torrent.BYTE_ENCODING)));
+			ByteBuffer.wrap(id.getBytes(Torrent.BYTE_ENCODING)), server);
 		
 		// Initialize the announce request thread, and register ourselves to it
 		// as well.
 		this.announce = new MultiTorrentAnnounce(this.self);
 		this.announce.register(this);
+		
+		this.server = server;
 		
 		start();
 	}
@@ -139,18 +153,6 @@ public class MultiTorrentClient implements
 			this.service.send(socketChannel, handshakeData);
 		} catch (UnsupportedEncodingException e) {
 			logger.error("There was a problem creating the handshake", e);
-		}
-	}
-	
-	@Override
-	public void handleReturnedHandshake(SocketChannel socketChannel, List<ByteBuffer> data) {
-		try {
-			Handshake hs = this.validateHandshake(socketChannel, data.get(0).array(), null);
-			this.handleNewPeerConnection(socketChannel, hs.getPeerId(), Torrent.byteArrayToHexString(hs.getInfoHash()));
-		} catch (IOException e) {
-			logger.error("There was a problem validating the returned handshake.", e);
-		} catch (ParseException e) {
-			logger.error("There was a problem validating the returned handshake.", e);
 		}
 	}
 	
@@ -330,6 +332,10 @@ public class MultiTorrentClient implements
 				PeerMessage have = PeerMessage.HaveMessage.craft(piece.getIndex());
 				for (SharingPeer remote : torrent.getConnected().values()) {
 					remote.send(have);
+					// If this is the server, send a server completion message as well
+					if (this.server) {
+						remote.send(PeerMessage.ServerMessage.craft((int) torrent.getCompletion()));
+					}
 				}
 
 				// Force notify after each piece is completed to propagate download
@@ -449,7 +455,7 @@ public class MultiTorrentClient implements
 		int optimisticIterations = 0;
 		int rateComputationIterations = 0;
 		
-		while (!this.torrents.isEmpty()) {
+		while (!this.stop) {
 			optimisticIterations =
 					(optimisticIterations == 0 ?
 							MultiTorrentClient.OPTIMISTIC_UNCHOKE_ITERATIONS :
@@ -512,5 +518,6 @@ public class MultiTorrentClient implements
 
 	@Override
 	public void handleNewPeerConnection(Socket s, byte[] peerId,
-			String torrentIdentifier) {	/* Do nothing */ }	
+			String torrentIdentifier) {	/* Do nothing */ }
+
 }

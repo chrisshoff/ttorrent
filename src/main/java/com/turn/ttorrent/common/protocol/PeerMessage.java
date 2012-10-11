@@ -15,11 +15,11 @@
  */
 package com.turn.ttorrent.common.protocol;
 
-import com.turn.ttorrent.client.SharedTorrent;
-
 import java.nio.ByteBuffer;
 import java.text.ParseException;
 import java.util.BitSet;
+
+import com.turn.ttorrent.client.SharedTorrent;
 
 /**
  * BitTorrent peer protocol messages representations.
@@ -54,7 +54,8 @@ public abstract class PeerMessage {
 		BITFIELD(5),
 		REQUEST(6),
 		PIECE(7),
-		CANCEL(8);
+		CANCEL(8),
+		SERVER(9);
 
 		private int id;
 		Type(int id) {
@@ -166,6 +167,8 @@ public abstract class PeerMessage {
 				return PieceMessage.parse(buffer.slice(), torrent);
 			case CANCEL:
 				return CancelMessage.parse(buffer.slice(), torrent);
+			case SERVER:
+				return ServerMessage.parse(buffer.slice(), torrent);
 			default:
 				throw new IllegalStateException("Message type should have " +
 						"been properly defined by now.");
@@ -643,6 +646,43 @@ public abstract class PeerMessage {
 		public String toString() {
 			return super.toString() + " #" + this.getPiece() +
 				" (" + this.getLength() + "@" + this.getOffset() + ")";
+		}
+	}
+	
+	/**
+	 * Server message.
+	 *
+	 * <len=0005><id=9>
+	 */
+	public static class ServerMessage extends PeerMessage {
+
+		private static final int BASE_SIZE = 5;
+		private int completion;
+		
+		private ServerMessage(ByteBuffer buffer) {
+			super(Type.SERVER, buffer);
+		}
+
+		private ServerMessage(ByteBuffer buffer, int completion) {
+			super(Type.SERVER, buffer);
+			this.completion = completion;
+		}
+
+		public static ServerMessage parse(ByteBuffer buffer, SharedTorrent torrent) throws MessageValidationException {
+			int completion = buffer.getInt();
+			return new ServerMessage(buffer, completion);
+		}
+
+		public static ServerMessage craft(int completion) {
+			ByteBuffer buffer = ByteBuffer.allocate(ServerMessage.BASE_SIZE + 4);
+			buffer.putInt(ServerMessage.BASE_SIZE);
+			buffer.put(PeerMessage.Type.SERVER.getTypeByte());
+			buffer.putInt(completion);
+			return new ServerMessage(buffer, completion);
+		}
+		
+		public int getCompletion() {
+			return this.completion;
 		}
 	}
 }
