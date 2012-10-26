@@ -19,7 +19,11 @@ import java.nio.ByteBuffer;
 import java.text.ParseException;
 import java.util.BitSet;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.turn.ttorrent.client.SharedTorrent;
+import com.turn.ttorrent.client.nio.PeerCommunicationManager;
 
 /**
  * BitTorrent peer protocol messages representations.
@@ -35,6 +39,9 @@ import com.turn.ttorrent.client.SharedTorrent;
  * @see <a href="http://wiki.theory.org/BitTorrentSpecification#Peer_wire_protocol_.28TCP.29">BitTorrent peer wire protocol</a>
  */
 public abstract class PeerMessage {
+	
+	private static final Logger logger =
+			LoggerFactory.getLogger(PeerMessage.class);
 
 	/**
 	 * Message type.
@@ -138,6 +145,7 @@ public abstract class PeerMessage {
 		if (length == 0) {
 			return KeepAliveMessage.parse(buffer, torrent);
 		} else if (length != buffer.remaining()) {
+			logger.error("Looking for {}, found {}", length, buffer.remaining());
 			throw new ParseException("Message size did not match announced " +
 					"size!", 0);
 		}
@@ -166,7 +174,7 @@ public abstract class PeerMessage {
 			case PIECE:
 				return PieceMessage.parse(buffer.slice(), torrent);
 			case CANCEL:
-				return CancelMessage.parse(buffer.slice(), torrent);
+				return CancelMessage.parse(buffer.slice());
 			case SERVER:
 				return ServerMessage.parse(buffer.slice(), torrent);
 			default:
@@ -582,70 +590,29 @@ public abstract class PeerMessage {
 	/**
 	 * Cancel message.
 	 *
-	 * <len=00013><id=8><piece index><block offset><block length>
+	 * <len=00001><id=8>
 	 */
 	public static class CancelMessage extends PeerMessage {
 
-		private static final int BASE_SIZE = 13;
+		private static final int BASE_SIZE = 1;
 
-		private int piece;
-		private int offset;
-		private int length;
-
-		private CancelMessage(ByteBuffer buffer, int piece,
-				int offset, int length) {
+		private CancelMessage(ByteBuffer buffer) {
 			super(Type.CANCEL, buffer);
-			this.piece = piece;
-			this.offset = offset;
-			this.length = length;
 		}
-
-		public int getPiece() {
-			return this.piece;
+		
+		public static CancelMessage parse(ByteBuffer buffer) throws MessageValidationException {
+			return new CancelMessage(buffer);
 		}
-
-		public int getOffset() {
-			return this.offset;
-		}
-
-		public int getLength() {
-			return this.length;
-		}
-
-		@Override
-		public CancelMessage validate(SharedTorrent torrent)
-			throws MessageValidationException {
-			if (this.piece >= 0 && this.piece < torrent.getPieceCount() &&
-				this.offset + this.length <=
-					torrent.getPiece(this.piece).size()) {
-				return this;
-			}
-
-			throw new MessageValidationException(this);
-		}
-
-		public static CancelMessage parse(ByteBuffer buffer,
-				SharedTorrent torrent) throws MessageValidationException {
-			int piece = buffer.getInt();
-			int offset = buffer.getInt();
-			int length = buffer.getInt();
-			return new CancelMessage(buffer, piece,
-					offset, length).validate(torrent);
-		}
-
-		public static CancelMessage craft(int piece, int offset, int length) {
-			ByteBuffer buffer = ByteBuffer.allocate(CancelMessage.BASE_SIZE+4);
-			buffer.putInt(CancelMessage.BASE_SIZE);
+		
+		public static CancelMessage craft() {
+			ByteBuffer buffer = ByteBuffer.allocate(CancelMessage.BASE_SIZE + 4);
+			buffer.putInt(BASE_SIZE);
 			buffer.put(PeerMessage.Type.CANCEL.getTypeByte());
-			buffer.putInt(piece);
-			buffer.putInt(offset);
-			buffer.putInt(length);
-			return new CancelMessage(buffer, piece, offset, length);
+			return new CancelMessage(buffer);
 		}
 
 		public String toString() {
-			return super.toString() + " #" + this.getPiece() +
-				" (" + this.getLength() + "@" + this.getOffset() + ")";
+			return super.toString();
 		}
 	}
 	

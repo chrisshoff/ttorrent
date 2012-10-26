@@ -307,7 +307,7 @@ public class SharedTorrent extends Torrent implements PeerActivityListener {
 			hashSingleThread();
 		}
 
-		logger.debug("{}: {}/{} bytes [{}/{}].",
+		logger.info("{}: {}/{} bytes [{}/{}].",
 			new Object[] {
 				this.getName(),
 				(this.getSize() - this.left),
@@ -330,7 +330,7 @@ public class SharedTorrent extends Torrent implements PeerActivityListener {
 			getHashingThreadsCount());
 		List<Future<Piece>> results = new LinkedList<Future<Piece>>();
 
-		logger.debug("Analyzing local data for {} with {} threads...",
+		logger.info("Analyzing local data for {} with {} threads...",
 			this.getName(), getHashingThreadsCount());
 		for (int idx=0; idx<this.pieces.length; idx++) {
 			byte[] hash = new byte[Torrent.PIECE_HASH_SIZE];
@@ -386,7 +386,7 @@ public class SharedTorrent extends Torrent implements PeerActivityListener {
 
 		List<Piece> results = new LinkedList<Piece>();
 
-		logger.debug("Analyzing local data for {} with {} threads...",
+		logger.info("Analyzing local data for {} with {} threads...",
 			this.getName(), getHashingThreadsCount());
 		for (int idx=0; idx<this.pieces.length; idx++) {
 			byte[] hash = new byte[Torrent.PIECE_HASH_SIZE];
@@ -637,6 +637,7 @@ public class SharedTorrent extends Torrent implements PeerActivityListener {
 
 		// Bail out immediately if the peer has no interesting pieces
 		if (interesting.cardinality() == 0) {
+			logger.info("Peer has no interesting pieces");
 			return;
 		}
 
@@ -691,7 +692,7 @@ public class SharedTorrent extends Torrent implements PeerActivityListener {
 		this.rarest.remove(piece);
 		this.rarest.add(piece);
 
-		logger.trace("Peer {} contributes {} piece(s) [{}/{}/{}].",
+		logger.info("Peer {} contributes {} piece(s) [{}/{}/{}].",
 			new Object[] {
 				peer,
 				peer.getAvailablePieces().cardinality(),
@@ -798,7 +799,7 @@ public class SharedTorrent extends Torrent implements PeerActivityListener {
 			// logger.warn("Downloaded piece {} was not valid ;-(", piece);
 		}
 
-		logger.trace("We now have {} piece(s) and {} outstanding request(s): {}.",
+		logger.info("We now have {} piece(s) and {} outstanding request(s): {}.",
 			new Object[] {
 				this.completedPieces.cardinality(),
 				this.requestedPieces.cardinality(),
@@ -832,7 +833,7 @@ public class SharedTorrent extends Torrent implements PeerActivityListener {
 			this.requestedPieces.set(requested.getIndex(), false);
 		}
 
-		logger.debug("Peer {} went away with {} piece(s) [{}/{}/{}].",
+		logger.info("Peer {} went away with {} piece(s) [{}/{}/{}].",
 			new Object[] {
 				peer,
 				availablePieces.cardinality(),
@@ -840,7 +841,7 @@ public class SharedTorrent extends Torrent implements PeerActivityListener {
 				this.getAvailablePieces().cardinality(),
 				this.pieces.length
 			});
-		logger.trace("We now have {} piece(s) and {} outstanding request(s): {}",
+		logger.info("We now have {} piece(s) and {} outstanding request(s): {}",
 			new Object[] {
 				this.completedPieces.cardinality(),
 				this.requestedPieces.cardinality(),

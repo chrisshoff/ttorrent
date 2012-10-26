@@ -7,11 +7,11 @@ import java.io.IOException;
 import java.security.NoSuchAlgorithmException;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.PriorityQueue;
 import java.util.Random;
 import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
-import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -37,6 +37,7 @@ public class ClientSharedTorrent extends SharedTorrent {
 	private boolean server;
 	private String id;
 	private boolean serverShared;
+
 	
 	public ClientSharedTorrent(Torrent torrent, File destDir, boolean multiThreadHash)
 			throws FileNotFoundException, IOException, NoSuchAlgorithmException {
@@ -112,7 +113,6 @@ public class ClientSharedTorrent extends SharedTorrent {
 		
 		// Detect early stop
 		if (this.stop) {
-			logger.info("Download is complete and no seeding was requested.");
 			this.finish();
 			return;
 		}
@@ -211,8 +211,8 @@ public class ClientSharedTorrent extends SharedTorrent {
 	public void unchokePeers(boolean optimistic) {
 		// Build a set of all connected peers, we don't care about peers we're
 		// not connected to.
-		TreeSet<SharingPeer> bound = new TreeSet<SharingPeer>(
-				this.getPeerRateComparator());
+		PriorityQueue<SharingPeer> bound = new PriorityQueue<SharingPeer>(10, this.getPeerRateComparator());
+		
 		bound.addAll(this.connected.values());
 
 		if (bound.size() == 0) {
@@ -220,7 +220,7 @@ public class ClientSharedTorrent extends SharedTorrent {
 			return;
 		} else {
 			logger.trace("Running unchokePeers() on {} connected peers.",
-				bound.size());
+					bound.size());
 		}
 
 		int downloaders = 0;
@@ -228,7 +228,7 @@ public class ClientSharedTorrent extends SharedTorrent {
 
 		// We're interested in the top downloaders first, so use a descending
 		// set.
-		for (SharingPeer peer : bound.descendingSet()) {
+		for (SharingPeer peer : bound) {
 			if (downloaders < MultiTorrentClient.MAX_DOWNLOADERS_UNCHOKE) {
 				// Unchoke up to MAX_DOWNLOADERS_UNCHOKE interested peers
 				if (peer.isChoking()) {
@@ -236,10 +236,12 @@ public class ClientSharedTorrent extends SharedTorrent {
 						downloaders++;
 					}
 
+					logger.info("Unchoking {}", peer);
 					peer.unchoke();
 				}
 			} else {
 				// Choke everybody else
+				logger.info("Adding {} to choke list");
 				choked.add(peer);
 			}
 		}
@@ -252,10 +254,10 @@ public class ClientSharedTorrent extends SharedTorrent {
 
 			for (SharingPeer peer : choked) {
 				if (optimistic && peer == randomPeer) {
-					logger.debug("Optimistic unchoke of {}.", peer);
 					continue;
 				}
 
+				logger.info("Choking {}", peer);
 				peer.choke();
 			}
 		}
@@ -313,11 +315,9 @@ public class ClientSharedTorrent extends SharedTorrent {
 		SharingPeer peer;
 
 		synchronized (this.peers) {
-			logger.trace("Searching for {}...", search);
 			if (search.hasPeerId()) {
 				peer = this.peers.get(search.getHexPeerId());
 				if (peer != null) {
-					logger.trace("Found peer (by peer ID): {}.", peer);
 					this.peers.put(peer.getHostIdentifier(), peer);
 					this.peers.put(search.getHostIdentifier(), peer);
 					return peer;
@@ -327,19 +327,15 @@ public class ClientSharedTorrent extends SharedTorrent {
 			peer = this.peers.get(search.getHostIdentifier());
 			if (peer != null) {
 				if (search.hasPeerId()) {
-					logger.trace("Recording peer ID {} for {}.",
-						search.getHexPeerId(), peer);
 					peer.setPeerId(search.getPeerId());
 					this.peers.put(search.getHexPeerId(), peer);
 				}
 
-				logger.debug("Found peer (by host ID): {}.", peer);
 				return peer;
 			}
 
 			peer = new SharingPeer(search.getIp(), search.getPort(),
 				search.getPeerId(), this);
-			logger.trace("Created new peer: {}.", peer);
 
 			this.peers.put(peer.getHostIdentifier(), peer);
 			if (peer.hasPeerId()) {

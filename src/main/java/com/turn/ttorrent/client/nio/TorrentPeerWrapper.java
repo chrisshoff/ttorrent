@@ -3,8 +3,8 @@ package com.turn.ttorrent.client.nio;
 import com.turn.ttorrent.client.peer.SharingPeer;
 
 public class TorrentPeerWrapper {
-	final public SharingPeer peer;
-	final public String torrentInfoHash;
+	public SharingPeer peer;
+	public String torrentInfoHash;
 	
 	public TorrentPeerWrapper(String torrentInfoHash) {
 		this.peer = null;

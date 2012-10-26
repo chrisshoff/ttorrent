@@ -340,7 +340,8 @@ public class SharingPeer extends Peer implements MessageListener {
 			}
 		}
 
-		this.firePeerDisconnected();
+		//this.firePeerDisconnected();
+		this.send(PeerMessage.CancelMessage.craft());
 		this.requestedPiece = null;
 	}
 
@@ -425,6 +426,7 @@ public class SharingPeer extends Peer implements MessageListener {
 						(int)(this.requestedPiece.size() -
 							this.lastRequestedOffset),
 						PeerMessage.RequestMessage.DEFAULT_REQUEST_SIZE));
+			logger.trace("Sending a REQUEST message for piece {} to {}", this.requestedPiece.getIndex(), this);
 			this.requests.add(request);
 			this.send(request);
 			this.lastRequestedOffset += request.getLength();
@@ -477,8 +479,8 @@ public class SharingPeer extends Peer implements MessageListener {
 
 		if (this.requests != null) {
 			for (PeerMessage.RequestMessage request : this.requests) {
-				this.send(PeerMessage.CancelMessage.craft(request.getPiece(),
-							request.getOffset(), request.getLength()));
+				/*this.send(PeerMessage.CancelMessage.craft(request.getPiece(),
+							request.getOffset(), request.getLength()));*/
 				requests.add(request);
 			}
 
@@ -495,6 +497,7 @@ public class SharingPeer extends Peer implements MessageListener {
 	 */
 	@Override
 	public synchronized void handleMessage(PeerMessage msg) {
+		logger.info("Got a {} message from peer {} regarding torrent " + this.getTorrent().toString(), msg.getType(), this);
 		switch (msg.getType()) {
 			case KEEP_ALIVE:
 				// Nothing to do, we're keeping the connection open anyways.
@@ -522,7 +525,7 @@ public class SharingPeer extends Peer implements MessageListener {
 
 				synchronized (this.availablePieces) {
 					this.availablePieces.set(havePiece.getIndex());
-					logger.trace("Peer {} now has {} [{}/{}].",
+					logger.info("Peer {} now has {} [{}/{}].",
 						new Object[] {
 							this,
 							havePiece,
@@ -540,7 +543,7 @@ public class SharingPeer extends Peer implements MessageListener {
 
 				synchronized (this.availablePieces) {
 					this.availablePieces = bitfield.getBitfield();
-					logger.trace("Recorded bitfield from {} with {} " +
+					logger.info("Recorded bitfield from {} with {} " +
 						"pieces(s) [{}/{}].",
 						new Object[] {
 							this,
@@ -604,6 +607,8 @@ public class SharingPeer extends Peer implements MessageListener {
 				// greedy?
 				PeerMessage.PieceMessage piece = (PeerMessage.PieceMessage)msg;
 				Piece p = this.torrent.getPiece(piece.getPiece());
+				
+				logger.trace("Got a PIECE message for piece {} from {}", piece.getPiece(), this);
 
 				// Remove the corresponding request from the request to make
 				// room for next block requests.
@@ -619,11 +624,13 @@ public class SharingPeer extends Peer implements MessageListener {
 					// we should validate the piece.
 					if (piece.getOffset() + piece.getBlock().capacity()
 							== p.size()) {
+						logger.trace("That was the last PIECE message for piece {}", piece.getPiece());
 						p.validate();
 						this.firePieceCompleted(p);
 						this.requestedPiece = null;
 						this.firePeerReady();
 					} else {
+						logger.trace("Request more blocks for this piece");
 						this.requestNextBlocks();
 					}
 				} catch (IOException ioe) {
@@ -632,7 +639,8 @@ public class SharingPeer extends Peer implements MessageListener {
 				}
 				break;
 			case CANCEL:
-				// No need to support
+				// This peer is going away
+				this.firePeerDisconnected();
 				break;
 			case SERVER:
 				// This is the main server, if interested.
