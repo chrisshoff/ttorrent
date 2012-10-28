@@ -15,27 +15,20 @@
  */
 package com.turn.ttorrent.client;
 
-import com.turn.ttorrent.bcodec.InvalidBEncodingException;
-import com.turn.ttorrent.common.Torrent;
-import com.turn.ttorrent.common.protocol.PeerMessage;
-import com.turn.ttorrent.client.peer.PeerActivityListener;
-import com.turn.ttorrent.client.peer.SharingPeer;
-import com.turn.ttorrent.client.storage.TorrentByteStorage;
-import com.turn.ttorrent.client.storage.FileStorage;
-import com.turn.ttorrent.client.storage.FileCollectionStorage;
-
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
-
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -47,6 +40,15 @@ import java.util.concurrent.Future;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.turn.ttorrent.bcodec.InvalidBEncodingException;
+import com.turn.ttorrent.client.peer.PeerActivityListener;
+import com.turn.ttorrent.client.peer.SharingPeer;
+import com.turn.ttorrent.client.storage.FileCollectionStorage;
+import com.turn.ttorrent.client.storage.FileStorage;
+import com.turn.ttorrent.client.storage.TorrentByteStorage;
+import com.turn.ttorrent.common.Torrent;
+import com.turn.ttorrent.common.protocol.PeerMessage;
 
 
 /**
@@ -72,6 +74,7 @@ public class SharedTorrent extends Torrent implements PeerActivityListener {
 	/** Randomly select the next piece to download from a peer from the
 	 * RAREST_PIECE_JITTER available from it. */
 	private static final int RAREST_PIECE_JITTER = 42;
+	protected static final long PIECE_TIMEOUT_MILLIS = 1000 * 60 * 3;
 
 	private Random random;
 	private boolean stop;
@@ -89,7 +92,8 @@ public class SharedTorrent extends Torrent implements PeerActivityListener {
 	private Piece[] pieces;
 	private SortedSet<Piece> rarest;
 	private BitSet completedPieces;
-	private BitSet requestedPieces;
+	protected BitSet requestedPieces;
+	protected Map<Integer, Long> requestedPiecesTime = new HashMap<Integer, Long>();
 	
 	private boolean multiThreadHash;
 
@@ -656,6 +660,7 @@ public class SharedTorrent extends Torrent implements PeerActivityListener {
 					Math.min(choice.size(),
 						SharedTorrent.RAREST_PIECE_JITTER)));
 		this.requestedPieces.set(chosen.getIndex());
+		this.requestedPiecesTime.put(chosen.getIndex(), System.currentTimeMillis());
 		logger.trace("Requesting {} from {}, we now have {} " +
 				" outstanding request(s): {}.",
 			new Object[] {
@@ -790,6 +795,7 @@ public class SharedTorrent extends Torrent implements PeerActivityListener {
 		// mark the piece as not requseted anymore
 		this.downloaded += piece.size();
 		this.requestedPieces.set(piece.getIndex(), false);
+		this.requestedPiecesTime.remove(piece.getIndex());
 
 		if (piece.isValid()) {
 			logger.trace("Validated download of {} from {}.", piece, peer);

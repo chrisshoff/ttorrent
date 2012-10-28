@@ -5,8 +5,11 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Random;
 import java.util.Set;
@@ -260,6 +263,23 @@ public class ClientSharedTorrent extends SharedTorrent {
 				logger.info("Choking {}", peer);
 				peer.choke();
 			}
+		}
+		
+		List<Integer> toRemove = new ArrayList<Integer>();
+		
+		for (Map.Entry<Integer, Long> pieceTime : this.requestedPiecesTime.entrySet()) {
+			if (System.currentTimeMillis() - pieceTime.getValue() >= PIECE_TIMEOUT_MILLIS) {
+				// This piece hasn't finished in the alotted time, release it from the requests - we'll try again later
+				synchronized(this.requestedPieces) {
+					logger.info("Piece {} timed out - releasing from requests", pieceTime.getKey());
+					this.requestedPieces.set(pieceTime.getKey(), false);
+					toRemove.add(pieceTime.getKey());
+				}
+			}
+		}
+		
+		for (Integer p : toRemove) {
+			this.requestedPiecesTime.remove(p);
 		}
 	}
 	
