@@ -151,12 +151,12 @@ public class Piece implements Comparable<Piece> {
 	 */
 	public boolean validate() throws IOException {
 		if (this.seeder) {
-			logger.trace("Skipping validation of {} (seeder mode).", this);
+			logger.info("Skipping validation of {} (seeder mode).", this);
 			this.valid = true;
 			return this.isValid();
 		}
 
-		logger.trace("Validating {}...", this);
+		logger.info("Validating {}...", this);
 		this.valid = false;
 
 		try {

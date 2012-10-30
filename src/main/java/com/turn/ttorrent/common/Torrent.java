@@ -135,6 +135,7 @@ public class Torrent extends Observable {
 	private String name;
 	private long size;
 	protected List<TorrentFile> files;
+	private byte[] pieceHash;
 
 	private boolean seeder;
 	
@@ -155,10 +156,11 @@ public class Torrent extends Observable {
 	 * @throws NoSuchAlgorithmException If the SHA-1 algorithm is not
 	 * available.
 	 */
-	public Torrent(byte[] torrent, File parent, boolean seeder)
+	public Torrent(byte[] torrent, File parent, boolean seeder, byte[] pieceHash)
 		throws IOException, NoSuchAlgorithmException {
 		this.encoded = torrent;
 		this.seeder = seeder;
+		this.pieceHash = pieceHash;
 
 		this.decoded = BDecoder.bdecode(
 				new ByteArrayInputStream(this.encoded)).getMap();
@@ -535,7 +537,7 @@ public class Torrent extends Observable {
 			fis = new FileInputStream(torrent);
 			byte[] data = new byte[(int)torrent.length()];
 			fis.read(data);
-			return new Torrent(data, parent, seeder);
+			return new Torrent(data, parent, seeder, null);
 		} finally {
 			if (fis != null) {
 				fis.close();
@@ -559,9 +561,9 @@ public class Torrent extends Observable {
 	 * @param createdBy The creator's name, or any string identifying the
 	 * torrent's creator.
 	 */
-	public static Torrent create(File source, URI announce, String createdBy, boolean multiThreadHash)
+	public static Torrent create(File source, URI announce, String createdBy, boolean multiThreadHash, byte[] pieceHash)
 		throws NoSuchAlgorithmException, InterruptedException, IOException {
-		return Torrent.create(source, null, announce, createdBy, multiThreadHash);
+		return Torrent.create(source, null, announce, createdBy, multiThreadHash, pieceHash);
 	}
 
 	/**
@@ -582,7 +584,7 @@ public class Torrent extends Observable {
 	 * torrent's creator.
 	 */
 	public static Torrent create(File parent, List<File> files, URI announce,
-		String createdBy, boolean multiThreadHash) throws NoSuchAlgorithmException,
+		String createdBy, boolean multiThreadHash, byte[] pieceHash) throws NoSuchAlgorithmException,
 		   InterruptedException, IOException {
 		if (files == null || files.isEmpty()) {
 			logger.info("Creating single-file torrent for {}...",
@@ -603,8 +605,15 @@ public class Torrent extends Observable {
 
 		if (files == null || files.isEmpty()) {
 			info.put("length", new BEValue(parent.length()));
-			info.put("pieces", new BEValue(Torrent.hashFile(parent, multiThreadHash),
-				Torrent.BYTE_ENCODING));
+			if (pieceHash == null) {
+				logger.info("No piece hash defined yet for this torrent - do it");
+				BEValue pieceHashVal = new BEValue(Torrent.hashFile(parent, multiThreadHash), Torrent.BYTE_ENCODING);
+				pieceHash = pieceHashVal.getBytes();
+				info.put("pieces", pieceHashVal);
+			} else {
+				logger.info("We already have a piece hash of {} for this torrent - use it");
+				info.put("pieces", new BEValue(pieceHash));
+			}
 		} else {
 			List<BEValue> fileInfo = new LinkedList<BEValue>();
 			for (File file : files) {
@@ -625,14 +634,21 @@ public class Torrent extends Observable {
 				fileInfo.add(new BEValue(fileMap));
 			}
 			info.put("files", new BEValue(fileInfo));
-			info.put("pieces", new BEValue(Torrent.hashFiles(files),
-				Torrent.BYTE_ENCODING));
+			if (pieceHash == null) {
+				logger.info("No piece hash defined yet for this torrent - do it");
+				BEValue pieceHashVal = new BEValue(Torrent.hashFiles(files), Torrent.BYTE_ENCODING);
+				pieceHash = pieceHashVal.getBytes();
+				info.put("pieces", pieceHashVal);
+			} else {
+				logger.info("We already have a piece hash of {} for this torrent - use it");
+				info.put("pieces", new BEValue(pieceHash));
+			}
 		}
 		torrent.put("info", new BEValue(info));
 
 		ByteArrayOutputStream baos = new ByteArrayOutputStream();
 		BEncoder.bencode(new BEValue(torrent), baos);
-		return new Torrent(baos.toByteArray(), null, true);
+		return new Torrent(baos.toByteArray(), null, true, pieceHash);
 	}
 
 	/**
@@ -863,9 +879,9 @@ public class Torrent extends Observable {
 				File[] files = source.listFiles();
 				Arrays.sort(files);
 				torrent = Torrent.create(source, Arrays.asList(files),
-					announce, creator, true);
+					announce, creator, true, null);
 			} else {
-				torrent = Torrent.create(source, announce, creator, true);
+				torrent = Torrent.create(source, announce, creator, true, null);
 			}
 
 			torrent.save(outfile);
@@ -970,5 +986,13 @@ public class Torrent extends Observable {
 
 	public void setSeeder(boolean seeder) {
 		this.seeder = seeder;
+	}
+
+	public byte[] getPieceHash() {
+		return pieceHash;
+	}
+
+	public void setPieceHash(byte[] pieceHash) {
+		this.pieceHash = pieceHash;
 	}
 }

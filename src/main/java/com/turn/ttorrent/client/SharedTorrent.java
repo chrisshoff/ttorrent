@@ -172,7 +172,7 @@ public class SharedTorrent extends Torrent implements PeerActivityListener {
 	 */
 	public SharedTorrent(byte[] torrent, File parent, boolean multiThreadHash, boolean seeder)
 		throws FileNotFoundException, IOException, NoSuchAlgorithmException {
-		super(torrent, parent, seeder);
+		super(torrent, parent, seeder, null);
 		
 		this.multiThreadHash = multiThreadHash;
 
@@ -414,6 +414,9 @@ public class SharedTorrent extends Torrent implements PeerActivityListener {
 				logger.error("There was a problem initializing piece " + idx);
 			}
 		}
+		
+		logger.info("Finished analyzing pieces");
+		logger.info("Building completedPieces and left lists");
 
 		for (Piece piece : results) {
 			if (this.pieces[piece.getIndex()].isValid()) {
@@ -421,6 +424,8 @@ public class SharedTorrent extends Torrent implements PeerActivityListener {
 				this.left -= piece.size();
 			}
 		}
+		
+		logger.info("Finished building completedPieces and left lists");
 	}
 
 	public synchronized void close() {

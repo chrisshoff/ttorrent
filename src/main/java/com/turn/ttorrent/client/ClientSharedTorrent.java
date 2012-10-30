@@ -37,37 +37,24 @@ public class ClientSharedTorrent extends SharedTorrent {
 	private Random random;
 	private long seed;
 	private boolean stop;
-	private boolean server;
 	private String id;
 	private boolean serverShared;
 
 	
-	public ClientSharedTorrent(Torrent torrent, File destDir, boolean multiThreadHash)
+	public ClientSharedTorrent(Torrent torrent, File destDir, boolean multiThreadHash, boolean seeder)
 			throws FileNotFoundException, IOException, NoSuchAlgorithmException {
-		this(torrent, destDir, multiThreadHash, false);
-	}
-	
-	public ClientSharedTorrent(Torrent torrent, File destDir, boolean multiThreadHash, boolean server)
-			throws FileNotFoundException, IOException, NoSuchAlgorithmException {
-		super(torrent, destDir, multiThreadHash);
+		super(torrent, destDir, multiThreadHash, seeder);
 		this.peers = new ConcurrentHashMap<String, SharingPeer>();
 		this.connected = new ConcurrentHashMap<String, SharingPeer>();
 		this.random = new Random(System.currentTimeMillis());
-		this.server = server;
 	}
 	
-	public ClientSharedTorrent(byte[] torrent, File destDir, boolean multiThreadHash)
+	public ClientSharedTorrent(byte[] torrent, File destDir, boolean multiThreadHash, boolean seeder)
 			throws FileNotFoundException, IOException, NoSuchAlgorithmException {
-		this(torrent, destDir, multiThreadHash, false);
-	}
-
-	public ClientSharedTorrent(byte[] torrent, File destDir, boolean multiThreadHash, boolean server)
-			throws FileNotFoundException, IOException, NoSuchAlgorithmException {
-		super(torrent, destDir, multiThreadHash);
+		super(torrent, destDir, multiThreadHash, seeder);
 		this.peers = new ConcurrentHashMap<String, SharingPeer>();
 		this.connected = new ConcurrentHashMap<String, SharingPeer>();
 		this.random = new Random(System.currentTimeMillis());
-		this.server = server;
 	}
 	
 	/**
@@ -85,7 +72,7 @@ public class ClientSharedTorrent extends SharedTorrent {
 		byte[] data = new byte[(int)source.length()];
 		fis.read(data);
 		fis.close();
-		return new ClientSharedTorrent(data, parent, multiThreadHash);
+		return new ClientSharedTorrent(data, parent, multiThreadHash, false);
 	}
 	
 	public void initialize() throws IOException {
