@@ -141,7 +141,7 @@ public class MultiTorrentClient implements
 	public void share(String identifier) throws IOException {
 		ClientSharedTorrent torrent = torrents.get(identifier);
 		if (torrent != null) {
-			logger.info("Sharing torrent with hash " + identifier);
+			logger.trace("Sharing torrent with hash " + identifier);
 			torrent.share();
 		}
 	}
@@ -179,6 +179,7 @@ public class MultiTorrentClient implements
 			try {
 				logger.trace("Got a handshake on channel {}", socketChannel);
 				Handshake hs = this.validateHandshake(socketChannel, data.array(), null);
+
 				if (tpw == null) {
 					logger.trace("We don't know this peer. Send a handshake back");
 					byte[] handshakeData = Handshake.craft(hs.getInfoHash(),
@@ -275,7 +276,7 @@ public class MultiTorrentClient implements
 		// Attach the SharingPeer to the selection key
 		this.torrentPeerAssociations.put(sc, new TorrentPeerWrapper(peer, hexInfoHash));
 		
-		logger.info("Registering new peer {} for torrent {}", peer, torrent.getHexInfoHash());
+		logger.info("Registering new peer {} with id " + peerId + " for torrent {}", peer, torrent.getHexInfoHash());
 		peer.setBound(true);
 		peer.resetRates();
 		torrent.getConnected().put(peer.getHexPeerId(), peer);
@@ -327,7 +328,7 @@ public class MultiTorrentClient implements
 				// might be called before the torrent's piece completion
 				// handler is.
 				torrent.markCompleted(piece);
-				logger.info("Completed download of {}, now has {}/{} pieces.",
+				logger.trace("Completed download of {}, now has {}/{} pieces.",
 					new Object[] {
 						piece,
 						torrent.getCompletedPieces().cardinality(),
@@ -382,7 +383,7 @@ public class MultiTorrentClient implements
 		if (torrent.getConnected().remove(peer.hasPeerId()
 					? peer.getHexPeerId()
 					: peer.getHostIdentifier()) != null) {
-			logger.info("Peer {} disconnected, [{}/{}].",
+			logger.trace("Peer {} disconnected, [{}/{}].",
 				new Object[] {
 					peer,
 					torrent.getConnected().size(),
@@ -395,7 +396,7 @@ public class MultiTorrentClient implements
 
 	@Override
 	public void handleIOException(SharingPeer peer, IOException ioe) {
-		System.out.println("HANDLE IO EXCEPTION");
+		logger.error("HANDLE IO EXCEPTION", ioe);
 	}
 
 	@Override
@@ -440,11 +441,11 @@ public class MultiTorrentClient implements
 				if (match.isConnected() ||
 					(torrent.isComplete() && torrent.getConnected().size() >=
 						MultiTorrentClient.VOLUNTARY_OUTBOUND_CONNECTIONS)) {
-					return;
+					continue;
 				}
 
 				try {
-					logger.info("Connecting to new peer {}", match);
+					logger.trace("Connecting to new peer {}", match.getPeerId());
 					SocketChannel sc = this.service.connect(match.getAddress(), match.getPort(), torrent.getInfoHash());
 				} catch (IOException e) {
 					logger.error("There was a problem connecting to the peer", e);
@@ -478,7 +479,7 @@ public class MultiTorrentClient implements
 				}
 				try {
 					torrent.unchokePeers(optimisticIterations == 0);
-					//torrent.info();
+					torrent.info();
 					
 					if (rateComputationIterations == 0) {
 						torrent.resetPeerRates();
@@ -549,7 +550,7 @@ public class MultiTorrentClient implements
 
 	@Override
 	public void sendPeerMessage(SharingPeer peer, PeerMessage message) {
-		logger.info("Sending a {} message to peer {} regarding torrent " + peer.getTorrent().toString(), message.getType(), peer);
+		logger.trace("Sending a {} message to peer {} regarding torrent " + peer.getTorrent().toString(), message.getType(), peer);
 		this.service.send(peer.getSocketChannel(), message.getData().array());
 	}
 

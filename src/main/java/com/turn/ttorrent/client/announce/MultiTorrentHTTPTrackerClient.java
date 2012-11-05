@@ -80,16 +80,6 @@ public class MultiTorrentHTTPTrackerClient extends MultiTorrentTrackerClient {
 	@Override
 	public void announce(AnnounceRequestMessage.RequestEvent event,
 		boolean inhibitEvents) throws AnnounceException {
-		
-		for (ClientSharedTorrent torrent : this.torrents) {
-			logger.info("Announcing{} to tracker with {}U/{}D/{}L bytes...",
-				new Object[] {
-					this.formatAnnounceEvent(event),
-					torrent.getUploaded(),
-					torrent.getDownloaded(),
-					torrent.getLeft()
-				});
-		}
 
 		URLConnection conn = null;
 
@@ -150,19 +140,21 @@ public class MultiTorrentHTTPTrackerClient extends MultiTorrentTrackerClient {
 			MessageValidationException {
 		// Build announce request messages
 		List<HTTPAnnounceRequestMessage> messages = new ArrayList<HTTPAnnounceRequestMessage>();
-		for (ClientSharedTorrent torrent : this.torrents) {
-			messages.add(
-					HTTPAnnounceRequestMessage.craft(
-					torrent.getInfoHash(),
-					this.peer.getPeerId().array(),
-					this.peer.getPort(),
-					torrent.getUploaded(),
-					torrent.getDownloaded(),
-					torrent.getLeft(),
-					true, false, event,
-					this.peer.getIp(),
-					AnnounceRequestMessage.DEFAULT_NUM_WANT)
-					);
+		synchronized(this.torrents) { 
+			for (ClientSharedTorrent torrent : this.torrents) {
+				messages.add(
+						HTTPAnnounceRequestMessage.craft(
+						torrent.getInfoHash(),
+						this.peer.getPeerId().array(),
+						this.peer.getPort(),
+						torrent.getUploaded(),
+						torrent.getDownloaded(),
+						torrent.getLeft(),
+						true, false, event,
+						this.peer.getIp(),
+						AnnounceRequestMessage.DEFAULT_NUM_WANT)
+						);
+			}
 		}
 		
 		return messages;

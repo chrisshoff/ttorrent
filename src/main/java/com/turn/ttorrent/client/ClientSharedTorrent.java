@@ -39,6 +39,7 @@ public class ClientSharedTorrent extends SharedTorrent {
 	private boolean stop;
 	private String id;
 	private boolean serverShared;
+	private boolean clientDownloaded;
 
 	
 	public ClientSharedTorrent(Torrent torrent, File destDir, boolean multiThreadHash, boolean seeder)
@@ -143,22 +144,22 @@ public class ClientSharedTorrent extends SharedTorrent {
 			return;
 		}
 
-		logger.info("Download of {} pieces completed.",
+		logger.trace("Download of {} pieces completed.",
 			this.getPieceCount());
 
 		if (this.seed == 0) {
-			logger.info("No seeding requested, stopping client...");
+			logger.trace("No seeding requested, stopping client...");
 			this.stop();
 			return;
 		}
 
 		setState(ClientState.SEEDING);
 		if (this.seed < 0) {
-			logger.info("Seeding indefinetely...");
+			logger.trace("Seeding indefinetely...");
 			return;
 		}
 
-		logger.info("Seeding for {} seconds...", this.seed);
+		logger.trace("Seeding for {} seconds...", this.seed);
 		Timer timer = new Timer();
 		timer.schedule(new TorrentShutdown(this, timer), this.seed*1000);
 	}
@@ -247,20 +248,24 @@ public class ClientSharedTorrent extends SharedTorrent {
 					continue;
 				}
 
-				logger.info("Choking {}", peer);
+				logger.trace("Choking {}", peer);
 				peer.choke();
 			}
 		}
 		
 		List<Integer> toRemove = new ArrayList<Integer>();
-		
-		for (Map.Entry<Integer, Long> pieceTime : this.requestedPiecesTime.entrySet()) {
-			if (System.currentTimeMillis() - pieceTime.getValue() >= PIECE_TIMEOUT_MILLIS) {
-				// This piece hasn't finished in the alotted time, release it from the requests - we'll try again later
-				synchronized(this.requestedPieces) {
-					logger.info("Piece {} timed out - releasing from requests", pieceTime.getKey());
-					this.requestedPieces.set(pieceTime.getKey(), false);
-					toRemove.add(pieceTime.getKey());
+
+		synchronized(this.requestedPiecesTime) {
+			for (Map.Entry<Integer, PeerAndMillis> pieceTime : this.requestedPiecesTime.entrySet()) {
+				if (System.currentTimeMillis() - pieceTime.getValue().time >= PIECE_TIMEOUT_MILLIS) {
+					// This piece hasn't finished in the alotted time, release it from the requests - we'll try again later
+					synchronized(this.requestedPieces) {
+						logger.info("Piece {} timed out - releasing from requests", pieceTime.getKey());
+						this.requestedPieces.set(pieceTime.getKey(), false);
+						pieceTime.getValue().peer.clearRequests();
+						toRemove.add(pieceTime.getKey());
+						handlePeerReady(pieceTime.getValue().peer);
+					}
 				}
 			}
 		}
@@ -397,6 +402,13 @@ public class ClientSharedTorrent extends SharedTorrent {
 
 	public void setServerShared(boolean serverShared) {
 		this.serverShared = serverShared;
-	}	
+	}
 
+	public boolean isClientDownloaded() {
+		return clientDownloaded;
+	}
+
+	public void setClientDownloaded(boolean clientDownloaded) {
+		this.clientDownloaded = clientDownloaded;
+	}
 }

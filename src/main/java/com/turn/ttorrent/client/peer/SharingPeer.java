@@ -497,7 +497,7 @@ public class SharingPeer extends Peer implements MessageListener {
 	 */
 	@Override
 	public synchronized void handleMessage(PeerMessage msg) {
-		logger.info("Got a {} message from peer {} regarding torrent " + this.getTorrent().toString(), msg.getType(), this);
+		logger.trace("Got a {} message from peer {} regarding torrent " + this.getTorrent().toString(), msg.getType(), this);
 		switch (msg.getType()) {
 			case KEEP_ALIVE:
 				// Nothing to do, we're keeping the connection open anyways.
@@ -525,7 +525,7 @@ public class SharingPeer extends Peer implements MessageListener {
 
 				synchronized (this.availablePieces) {
 					this.availablePieces.set(havePiece.getIndex());
-					logger.info("Peer {} now has {} [{}/{}].",
+					logger.trace("Peer {} now has {} [{}/{}].",
 						new Object[] {
 							this,
 							havePiece,
@@ -543,7 +543,7 @@ public class SharingPeer extends Peer implements MessageListener {
 
 				synchronized (this.availablePieces) {
 					this.availablePieces = bitfield.getBitfield();
-					logger.info("Recorded bitfield from {} with {} " +
+					logger.trace("Recorded bitfield from {} with {} " +
 						"pieces(s) [{}/{}].",
 						new Object[] {
 							this,
@@ -829,5 +829,10 @@ public class SharingPeer extends Peer implements MessageListener {
 
 	public void setSocketChannel(SocketChannel socketChannel) {
 		this.socketChannel = socketChannel;
+	}
+	
+	public void clearRequests() {
+		this.requests = null;
+		this.requestedPiece = null;
 	}
 }

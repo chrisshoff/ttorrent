@@ -37,11 +37,7 @@ public class WriteWorker implements Runnable {
 				}
 				
 				// Handle next item in queue
-				try {
-					writeData(queue.remove(0));
-				} catch (IOException e) {
-					logger.error("There was an error writing data to a socket channel", e);
-				}
+				writeData(queue.remove(0));
 			}
 		}
 	}
@@ -53,7 +49,7 @@ public class WriteWorker implements Runnable {
 		}
 	}
 	
-	private void writeData(SelectionKey key) throws IOException {
+	private void writeData(SelectionKey key) {
 		SocketChannel socketChannel = (SocketChannel) key.channel();
 		
 		synchronized (this.pendingData) {
@@ -76,16 +72,28 @@ public class WriteWorker implements Runnable {
 				if (buf != null) {
 					while(buf.remaining() > 0) {
 						int bytesWritten;
-						SocketChannel channel = (SocketChannel) key.channel();
-						synchronized (channel) {
-							bytesWritten = channel.write(buf);
-						}
 						
-						if (bytesWritten == -1) {
-							System.out.println("No bytes written");
+						try {
+							synchronized (socketChannel) {
+								bytesWritten = socketChannel.write(buf);
+							}
+							
+							if (bytesWritten == -1) {
+								System.out.println("No bytes written");
+							}
+							
+							logger.trace("Writing {} bytes to socket channel {}", bytesWritten, socketChannel);
+						} catch (IOException e) {
+							logger.error("There was a problem writing to socket {}", socketChannel, e);
+							try {
+								socketChannel.close(); // Try closing the socket
+							} catch (IOException e2) {
+								logger.error("Couldn't close channel {}.", socketChannel, e); // Not much we can do here
+							}
+							queue.remove(0); // Remove this data from the queue
+							key.cancel(); // Cancel the key's registration with our selector
+							return;
 						}
-						
-						logger.trace("Writing {} bytes to socket channel {}", bytesWritten, socketChannel);
 					}
 				}
 				
@@ -93,7 +101,6 @@ public class WriteWorker implements Runnable {
 			}
 			
 			if (queue.isEmpty()) {
-				// Set this key back to read after we're done writing
 				key.interestOps(SelectionKey.OP_READ);
 			}
 		}

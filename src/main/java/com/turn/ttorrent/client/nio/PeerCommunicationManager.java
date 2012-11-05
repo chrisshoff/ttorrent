@@ -11,9 +11,11 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.channels.spi.SelectorProvider;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,6 +39,7 @@ public class PeerCommunicationManager extends Thread {
 	ByteBuffer stagingBuffer = ByteBuffer.allocate(8192);
 	ReadWorker readWorker;
 	WriteWorker writeWorker;
+	private Map pendingData = new HashMap();
 	
 	public PeerCommunicationManager(InetAddress address)
 			throws IOException {
@@ -73,58 +76,124 @@ public class PeerCommunicationManager extends Thread {
 	}
 	
 	public void run() {
-		while(true) {
-			try {
-				// Look for pending requests to change a key or socket
-				synchronized (this.changeRequests) {
-					Iterator<ChangeRequest> changes = this.changeRequests.iterator();
-					while (changes.hasNext()) {
-						ChangeRequest change = (ChangeRequest) changes.next();
-						switch (change.type) {
-						case ChangeRequest.CHANGEOPS:
-							SelectionKey key = change.socket.keyFor(this.selector);
-							key.interestOps(change.ops);
-							break;
-						case ChangeRequest.REGISTER:
-							change.socket.register(this.selector, change.ops, change.additionalData);
-							break;
+			while(true) {
+				try {
+					// Look for pending requests to change a key or socket
+					synchronized (this.changeRequests) {
+						Iterator<ChangeRequest> changes = this.changeRequests.iterator();
+						while (changes.hasNext()) {
+							ChangeRequest change = (ChangeRequest) changes.next();
+							switch (change.type) {
+							case ChangeRequest.CHANGEOPS:
+								SelectionKey key = change.socket.keyFor(this.selector);
+								if (key == null) {
+									logger.warn("Selection key {} is null and was probably cancelled", key);
+									break;
+								}
+								key.interestOps(change.ops);
+								break;
+							case ChangeRequest.REGISTER:
+								change.socket.register(this.selector, change.ops, change.additionalData);
+								break;
+							}
+						}
+						
+						this.changeRequests.clear();
+					}
+					
+					this.selector.select(); // Blocking select call
+					
+					// We found keys ready for selection
+					Iterator<SelectionKey> selectedKeys = this.selector.selectedKeys().iterator();
+					while (selectedKeys.hasNext()) {
+						SelectionKey key = (SelectionKey) selectedKeys.next();
+						selectedKeys.remove();
+						
+						if (!key.isValid()) {
+							continue;
+						}
+	
+						// Determine what to do with the socket channel
+						if (key.isConnectable()) {
+							this.finishConnection(key);
+						} else if (key.isAcceptable()) {
+							this.accept(key);
+						} else if (key.isReadable()) {
+							this.read(key);
+						} else if (key.isWritable()) {
+							this.write(key);
 						}
 					}
 					
-					this.changeRequests.clear();
+				} catch (IOException e) {
+					logger.error("The NIO selector threw an exception", e);
+				} catch (Throwable t) {
+					logger.error("An unexpected error was thrown in the main PeerCommunicationManager thread", t);
 				}
-				
-				this.selector.select(); // Blocking select call
-				
-				// We found keys ready for selection
-				Iterator<SelectionKey> selectedKeys = this.selector.selectedKeys().iterator();
-				while (selectedKeys.hasNext()) {
-					SelectionKey key = (SelectionKey) selectedKeys.next();
-					selectedKeys.remove();
-					
-					if (!key.isValid()) {
-						continue;
-					}
-
-					// Determine what to do with the socket channel
-					if (key.isConnectable()) {
-						this.finishConnection(key);
-					} else if (key.isAcceptable()) {
-						this.accept(key);
-					} else if (key.isReadable()) {
-						this.read(key);
-					} else if (key.isWritable()) {
-						this.write(key);
-					}
-				}
-			} catch (IOException e) {
-				logger.error("The NIO selector threw an exception", e);
 			}
-		}
 	}
 
 	private void write(SelectionKey key) throws IOException {
-		this.writeWorker.processData(key);
+		SocketChannel socketChannel = (SocketChannel) key.channel();
+		
+		synchronized (this.pendingData) {
+			List queue= (List) this.pendingData.get(socketChannel);
+			
+			while (!queue.isEmpty()) {
+				byte[] data = (byte[]) queue.get(0);
+				short len = (short) data.length;
+				
+				// Create 2-bytes to prepend the message with indicating the length
+				byte[] lengthBytes = new TwoByteMessageLength().lengthToBytes(len);
+				
+				// Allocate a byte buffer of the message length, plus the length of the length prefix
+				ByteBuffer buf = ByteBuffer.allocate(len+lengthBytes.length);
+				buf.position(0);
+				buf.put(lengthBytes);
+				buf.put(data);
+				buf.flip();
+				
+				if (buf != null) {
+					while(buf.remaining() > 0) {
+						int bytesWritten;
+						
+						try {
+							synchronized (socketChannel) {
+								bytesWritten = socketChannel.write(buf);
+							}
+							
+							if (bytesWritten == -1) {
+								System.out.println("No bytes written");
+							}
+							
+							logger.trace("Writing {} bytes to socket channel {}", bytesWritten, socketChannel);
+						} catch (IOException e) {
+							logger.error("There was a problem writing to socket {}", socketChannel, e);
+							try {
+								socketChannel.close(); // Try closing the socket
+							} catch (IOException e2) {
+								logger.error("Couldn't close channel {}.", socketChannel, e); // Not much we can do here
+							}
+							queue.remove(0); // Remove this data from the queue
+							key.cancel(); // Cancel the key's registration with our selector
+							return;
+						}
+					}
+				}
+				
+				if (buf.remaining() > 0) {
+					break;
+				}
+				
+				queue.remove(0);
+			}
+			
+			if (queue.isEmpty()) {
+				// Set this key back to read after we're done writing
+				key.interestOps(SelectionKey.OP_READ);
+			}
+		}
+
 	}
 
 	private void read(SelectionKey key) throws IOException {
@@ -153,12 +222,18 @@ public class PeerCommunicationManager extends Thread {
 		
 	}
 
-	private void accept(SelectionKey key) throws IOException {
+	private void accept(SelectionKey key) {
 		// Accept a new connection - set up the resulting socket channel for read
 		ServerSocketChannel serverSocketChannel = (ServerSocketChannel) key.channel();
-		SocketChannel socketChannel = serverSocketChannel.accept();
-		socketChannel.configureBlocking(false);
-		socketChannel.register(this.selector, SelectionKey.OP_READ);
+		
+		SocketChannel socketChannel;
+		try {
+			socketChannel = serverSocketChannel.accept();
+			socketChannel.configureBlocking(false);
+			socketChannel.register(this.selector, SelectionKey.OP_READ);
+		} catch (IOException e) {
+			logger.error("There was a problem accepting a connection on this channel", e);
+		}
 	}
 
 	private void finishConnection(SelectionKey key) {
@@ -199,7 +274,6 @@ public class PeerCommunicationManager extends Thread {
 	}
 
 	public SocketChannel connect(InetAddress address, int port, byte[] infoHash) throws IOException {
-		logger.trace("Initiating connection with {}", address.toString() + ":" + port);
 		SocketChannel socketChannel = SocketChannel.open();
 		socketChannel.configureBlocking(false);
 		socketChannel.connect(new InetSocketAddress(address, port));
@@ -220,11 +294,11 @@ public class PeerCommunicationManager extends Thread {
 			this.changeRequests.add(new ChangeRequest(socketChannel, ChangeRequest.CHANGEOPS, SelectionKey.OP_WRITE));
 			
 			// Put the data to be written in the pending data list
-			synchronized (this.writeWorker.pendingData) {
-				List<byte[]> queue = this.writeWorker.pendingData.get(socketChannel);
+			synchronized (this.pendingData) {
+				List queue = (List) this.pendingData.get(socketChannel);
 				if (queue == null) {
-					queue = new ArrayList<byte[]>();
-					this.writeWorker.pendingData.put(socketChannel, queue);
+					queue = new ArrayList();
+					this.pendingData.put(socketChannel, queue);
 				}
 				queue.add(data);
 			}
