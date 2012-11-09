@@ -122,9 +122,10 @@ public abstract class MultiTorrentTrackerClient {
 	 *
 	 * @param message The incoming {@link TrackerMessage}.
 	 * @param inhibitEvents Whether or not to prevent events from being fired.
+	 * @param hexInfoHash used to determine what torrent this peer is announcing for and callback correctly
 	 */
 	protected void handleTrackerAnnounceResponse(TrackerMessage message,
-		boolean inhibitEvents) throws AnnounceException {
+		boolean inhibitEvents, String hexInfoHash) throws AnnounceException {
 		if (message instanceof ErrorMessage) {
 			ErrorMessage error = (ErrorMessage)message;
 			throw new AnnounceException(error.getReason());
@@ -146,7 +147,7 @@ public abstract class MultiTorrentTrackerClient {
 			response.getIncomplete(),
 			response.getInterval());
 		this.fireDiscoveredPeersEvent(
-			response.getPeers(), response.getHexInfoHash());
+			response.getPeers(), hexInfoHash);
 	}
 
 	/**

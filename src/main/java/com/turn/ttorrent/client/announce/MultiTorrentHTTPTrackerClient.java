@@ -99,7 +99,7 @@ public class MultiTorrentHTTPTrackerClient extends MultiTorrentTrackerClient {
 				// Parse and handle the response
 				HTTPTrackerMessage message =
 					HTTPTrackerMessage.parse(ByteBuffer.wrap(baos.toByteArray()));
-				this.handleTrackerAnnounceResponse(message, inhibitEvents);
+				this.handleTrackerAnnounceResponse(message, inhibitEvents, request.getHexInfoHash());
 			}
 		} catch (MalformedURLException mue) {
 			throw new AnnounceException("Invalid announce URL (" +
@@ -133,6 +133,7 @@ public class MultiTorrentHTTPTrackerClient extends MultiTorrentTrackerClient {
 	 * @throws UnsupportedEncodingException
 	 * @throws IOException
 	 * @throws MessageValidationException
+	 * 
 	 */
 	private List<HTTPAnnounceRequestMessage> buildAnnounceRequests(
 		AnnounceRequestMessage.RequestEvent event)

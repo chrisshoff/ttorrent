@@ -276,7 +276,7 @@ public class MultiTorrentClient implements
 		// Attach the SharingPeer to the selection key
 		this.torrentPeerAssociations.put(sc, new TorrentPeerWrapper(peer, hexInfoHash));
 		
-		logger.info("Registering new peer {} with id " + peerId + " for torrent {}", peer, torrent.getHexInfoHash());
+		logger.trace("Registering new peer {} with id " + peerId + " for torrent {}", peer, torrent.getHexInfoHash());
 		peer.setBound(true);
 		peer.resetRates();
 		torrent.getConnected().put(peer.getHexPeerId(), peer);
@@ -322,6 +322,7 @@ public class MultiTorrentClient implements
 		
 		synchronized (torrent) {
 			if (piece.isValid()) {
+				
 				// Make sure the piece is marked as completed in the torrent
 				// Note: this is required because the order the
 				// PeerActivityListeners are called is not defined, and we
@@ -396,7 +397,7 @@ public class MultiTorrentClient implements
 
 	@Override
 	public void handleIOException(SharingPeer peer, IOException ioe) {
-		logger.error("HANDLE IO EXCEPTION", ioe);
+		logger.error("There was an IOException", ioe);
 	}
 
 	@Override
