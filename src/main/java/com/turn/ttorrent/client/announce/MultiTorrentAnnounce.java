@@ -199,7 +199,7 @@ public class MultiTorrentAnnounce implements Runnable {
 				this.trackerClient.announce(event, false);
 				event = AnnounceRequestMessage.RequestEvent.NONE;
 			} catch (AnnounceException ae) {
-				logger.warn(ae.getMessage());
+				logger.trace(ae.getMessage());
 			}
 
 			try {
