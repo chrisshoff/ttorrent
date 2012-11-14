@@ -196,16 +196,20 @@ public class MultiTorrentAnnounce implements Runnable {
 
 		while (!this.stop) {
 			try {
-				this.trackerClient.announce(event, false);
-				event = AnnounceRequestMessage.RequestEvent.NONE;
-			} catch (AnnounceException ae) {
-				logger.trace(ae.getMessage());
-			}
-
-			try {
-				Thread.sleep(this.interval * 1000);
-			} catch (InterruptedException ie) {
-				// Ignore
+				try {
+					this.trackerClient.announce(event, false);
+					event = AnnounceRequestMessage.RequestEvent.NONE;
+				} catch (AnnounceException ae) {
+					logger.warn(ae.getMessage());
+				}
+	
+				try {
+					Thread.sleep(this.interval * 1000);
+				} catch (InterruptedException ie) {
+					// Ignore
+				}
+			} catch (Throwable e) {
+				logger.error("There was an error in the main announce loop", e);
 			}
 		}
 
