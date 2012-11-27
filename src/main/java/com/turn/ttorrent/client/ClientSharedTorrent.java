@@ -298,15 +298,7 @@ public class ClientSharedTorrent extends SharedTorrent {
 	}
 	
 	public synchronized void info() {
-		float dl = 0;
-		float ul = 0;
-		for (SharingPeer peer : this.connected.values()) {
-			dl += peer.getDLRate().get();
-			ul += peer.getULRate().get();
-			if (peer.isServer()) {
-				peer.getTorrent().getCompletion();
-			}
-		}
+		List<Float> rates = getRates();
 
 		logger.info("{} {}/{} pieces ({}%) [{}/{}] with {}/{} peers at {}/{} kB/s.",
 			new Object[] {
@@ -318,9 +310,27 @@ public class ClientSharedTorrent extends SharedTorrent {
 				this.getRequestedPieces().cardinality(),
 				this.connected.size(),
 				this.peers.size(),
-				String.format("%.2f", dl/1024.0),
-				String.format("%.2f", ul/1024.0),
+				String.format("%.2f", rates.get(1)/1024.0),
+				String.format("%.2f", rates.get(0)/1024.0),
 			});
+	}
+	
+	public List<Float> getRates() {
+		float dl = 0;
+		float ul = 0;
+		List<Float> rates = new ArrayList<Float>();
+		for (SharingPeer peer : this.connected.values()) {
+			dl += peer.getDLRate().get();
+			ul += peer.getULRate().get();
+			if (peer.isServer()) {
+				peer.getTorrent().getCompletion();
+			}
+		}
+		
+		rates.add(ul);
+		rates.add(dl);
+		
+		return rates;
 	}
 	
 	public SharingPeer getOrCreatePeer(Peer search) {
