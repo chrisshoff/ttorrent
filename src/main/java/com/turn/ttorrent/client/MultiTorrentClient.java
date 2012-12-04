@@ -12,6 +12,7 @@ import java.text.ParseException;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -22,6 +23,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.turn.ttorrent.client.Client.ClientState;
+import com.turn.ttorrent.client.SharedTorrent.PeerAndMillis;
 import com.turn.ttorrent.client.announce.AnnounceException;
 import com.turn.ttorrent.client.announce.AnnounceResponseListener;
 import com.turn.ttorrent.client.announce.MultiTorrentAnnounce;
@@ -67,6 +69,10 @@ public class MultiTorrentClient implements
 	private String id;
 	protected boolean stop = false;
 	protected boolean server;
+	
+	// The purpose of this map is to quickly look up a peer by its socket in the event that the PeerCommunication Manager
+	// finds a bad socket channel
+	protected HashMap<SocketChannel, SharingPeer> socketChannelMap = new HashMap<SocketChannel, SharingPeer>();
 	
 	// Map of socket channels to torrents and peers. This allows us to quickly determine what peers we are talking to
 	// when a connection is being created and managed.
@@ -280,6 +286,7 @@ public class MultiTorrentClient implements
 		peer.setBound(true);
 		peer.resetRates();
 		torrent.getConnected().put(peer.getHexPeerId(), peer);
+		socketChannelMap.put(sc, peer);
 		peer.register(torrent);
 		peer.register(this);
 	
@@ -391,6 +398,12 @@ public class MultiTorrentClient implements
 					torrent.getPeers().size()
 				});
 		}
+		
+		if (peer.getRequestedPiece() != null) {
+			torrent.releasePiece(peer.getRequestedPiece());
+		}
+		
+		socketChannelMap.remove(peer.getSocketChannel());
 	
 		peer.reset();
 	}
@@ -553,6 +566,16 @@ public class MultiTorrentClient implements
 	public void sendPeerMessage(SharingPeer peer, PeerMessage message) {
 		logger.trace("Sending a {} message to peer {} regarding torrent " + peer.getTorrent().toString(), message.getType(), peer);
 		this.service.send(peer.getSocketChannel(), message.getData().array());
+	}
+	
+	@Override
+	public void handleBadSocket(SocketChannel socketChannel) {
+		logger.warn("Socket Channel " + socketChannel + " is bad. Remove the associated peer.");
+		SharingPeer badPeer = socketChannelMap.get(socketChannel);
+		if (badPeer != null) {
+			logger.warn("Disconnecting peer {}", badPeer);
+			handlePeerDisconnected(badPeer);
+		}
 	}
 
 	@Override

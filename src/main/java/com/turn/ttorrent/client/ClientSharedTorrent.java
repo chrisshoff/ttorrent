@@ -8,6 +8,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
@@ -199,7 +200,7 @@ public class ClientSharedTorrent extends SharedTorrent {
 		}
 	};
 	
-	public void unchokePeers(boolean optimistic) {
+	public synchronized void unchokePeers(boolean optimistic) {
 		// Build a set of all connected peers, we don't care about peers we're
 		// not connected to.
 		PriorityQueue<SharingPeer> bound = new PriorityQueue<SharingPeer>(10, this.getPeerRateComparator());
@@ -253,26 +254,23 @@ public class ClientSharedTorrent extends SharedTorrent {
 			}
 		}
 		
-		List<Integer> toRemove = new ArrayList<Integer>();
-
-		synchronized(this.requestedPiecesTime) {
-			for (Map.Entry<Integer, PeerAndMillis> pieceTime : this.requestedPiecesTime.entrySet()) {
-				if (System.currentTimeMillis() - pieceTime.getValue().time >= PIECE_TIMEOUT_MILLIS) {
-					// This piece hasn't finished in the alotted time, release it from the requests - we'll try again later
-					synchronized(this.requestedPieces) {
-						logger.info("Piece {} timed out - releasing from requests", pieceTime.getKey());
-						this.requestedPieces.set(pieceTime.getKey(), false);
-						pieceTime.getValue().peer.clearRequests();
-						toRemove.add(pieceTime.getKey());
-						handlePeerReady(pieceTime.getValue().peer);
-					}
-				}
+		Iterator<Map.Entry<Integer, PeerAndMillis>> entries = this.requestedPiecesTime.entrySet().iterator();
+		while (entries.hasNext()) {
+			Map.Entry<Integer, PeerAndMillis> pieceTime = entries.next();
+			if (System.currentTimeMillis() - pieceTime.getValue().time >= PIECE_TIMEOUT_MILLIS) {
+				// This piece hasn't finished in the alotted time, release it from the requests - we'll try again later
+				logger.info("Piece {} timed out - releasing from requests", pieceTime.getKey());
+				this.requestedPieces.set(pieceTime.getKey(), false);
+				pieceTime.getValue().peer.clearRequests();
+				entries.remove();
+				handlePeerReady(pieceTime.getValue().peer);
 			}
 		}
-		
-		for (Integer p : toRemove) {
-			this.requestedPiecesTime.remove(p);
-		}
+	}
+	
+	public synchronized void releasePiece(Piece piece) {
+		this.requestedPieces.set(piece.getIndex(), false);
+		this.requestedPiecesTime.remove(piece.getIndex());
 	}
 	
 	public ClientState getClientState() {
@@ -300,7 +298,7 @@ public class ClientSharedTorrent extends SharedTorrent {
 	public synchronized void info() {
 		List<Float> rates = getRates();
 
-		logger.info("{} {}/{} pieces ({}%) [{}/{}] with {}/{} peers at {}/{} kB/s.",
+		/*logger.info("{} {}/{} pieces ({}%) [{}/{}] with {}/{} peers at {}/{} kB/s.",
 			new Object[] {
 				this.state.name(),
 				this.getCompletedPieces().cardinality(),
@@ -312,7 +310,7 @@ public class ClientSharedTorrent extends SharedTorrent {
 				this.peers.size(),
 				String.format("%.2f", rates.get(1)/1024.0),
 				String.format("%.2f", rates.get(0)/1024.0),
-			});
+			});*/
 	}
 	
 	public List<Float> getRates() {

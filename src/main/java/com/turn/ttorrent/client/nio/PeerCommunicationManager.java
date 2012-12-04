@@ -87,7 +87,8 @@ public class PeerCommunicationManager extends Thread {
 							case ChangeRequest.CHANGEOPS:
 								SelectionKey key = change.socket.keyFor(this.selector);
 								if (key == null) {
-									logger.warn("Selection key {} is null and was probably cancelled", key);
+									logger.warn("Selection key is null and was probably cancelled. This is a bad socket - tell the client to stop using it", key);
+									this.fireBadSocketListeners(change.socket);
 									break;
 								}
 								key.interestOps(change.ops);
@@ -251,6 +252,12 @@ public class PeerCommunicationManager extends Thread {
 	    
 	    // Let our listeners know we've completed a connection
 	    fireNewConnectionListeners(socketChannel, (String) key.attachment());
+	}
+	
+	private void fireBadSocketListeners(SocketChannel socketChannel) {
+		for (CommunicationListener listener : this.listeners) {
+			listener.handleBadSocket(socketChannel);
+		}
 	}
 	
 	private void fireNewConnectionListeners(SocketChannel socketChannel, String hexInfoHash) {

@@ -25,7 +25,6 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -33,6 +32,7 @@ import java.util.Random;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -93,7 +93,7 @@ public class SharedTorrent extends Torrent implements PeerActivityListener {
 	private SortedSet<Piece> rarest;
 	private BitSet completedPieces;
 	protected BitSet requestedPieces;
-	protected Map<Integer, PeerAndMillis> requestedPiecesTime = new HashMap<Integer, PeerAndMillis>();
+	protected Map<Integer, PeerAndMillis> requestedPiecesTime = new ConcurrentHashMap<Integer, PeerAndMillis>();
 	
 	private boolean multiThreadHash;
 	
@@ -513,14 +513,12 @@ public class SharedTorrent extends Torrent implements PeerActivityListener {
 	/**
 	 * Return a copy of the requested pieces bitset.
 	 */
-	public BitSet getRequestedPieces() {
+	public synchronized BitSet getRequestedPieces() {
 		if (!this.isInitialized()) {
 			throw new IllegalStateException("Torrent not yet initialized!");
 		}
-
-		synchronized (this.requestedPieces) {
-			return (BitSet)this.requestedPieces.clone();
-		}
+		
+		return (BitSet)this.requestedPieces.clone();
 	}
 
 	/**

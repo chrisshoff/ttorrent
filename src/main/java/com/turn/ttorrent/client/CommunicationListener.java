@@ -37,4 +37,6 @@ public interface CommunicationListener extends EventListener {
 	public void handleFailedConnection(SharingPeer peer, Throwable cause);
 	
 	public void handleNewPeerConnection(Socket s, byte[] peerId, String torrentIdentifier);
+	
+	public void handleBadSocket(SocketChannel s) ;
 }
