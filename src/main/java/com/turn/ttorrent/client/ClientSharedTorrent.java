@@ -263,7 +263,13 @@ public class ClientSharedTorrent extends SharedTorrent {
 				this.requestedPieces.set(pieceTime.getKey(), false);
 				pieceTime.getValue().peer.clearRequests();
 				entries.remove();
-				handlePeerReady(pieceTime.getValue().peer);
+				
+				if (pieceTime.getValue().peer.getSocketChannel().isOpen()) {
+					logger.info("Socket channel is still good - tell the peer to request again");
+					handlePeerReady(pieceTime.getValue().peer);
+				} else {
+					logger.info("Socket channel is no good. Don't let it request again.");
+				}
 			}
 		}
 	}
