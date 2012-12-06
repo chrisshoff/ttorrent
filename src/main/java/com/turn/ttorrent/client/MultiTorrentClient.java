@@ -131,8 +131,15 @@ public class MultiTorrentClient implements
 	 * @throws UnknownServiceException
 	 */
 	public void addTorrent(ClientSharedTorrent torrent) throws UnknownHostException, UnknownServiceException {
+		boolean alreadyShared = false;
+		if (this.torrents.get(torrent.getHexInfoHash()) != null) {
+			// This torrent is already being shared
+			alreadyShared = true;
+		}
 		this.torrents.put(torrent.getHexInfoHash(), torrent);
-		this.announce.addTorrent(torrent);
+		if (!alreadyShared) {
+			this.announce.addTorrent(torrent);
+		}
 	}
 	
 	public void start() {
