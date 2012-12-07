@@ -185,10 +185,10 @@ public class MultiTorrentClient implements
 	 */
 	private void handleMessage(ByteBuffer data, SocketChannel socketChannel) {
 		
-		int pstrlen = Byte.valueOf(data.get()).intValue();
+		int pstrlen = data.getInt();
 		TorrentPeerWrapper tpw = this.torrentPeerAssociations.get(socketChannel);
 		
-		if (pstrlen >= 0 && data.remaining() == Handshake.BASE_HANDSHAKE_LENGTH + pstrlen - 1) {
+		if (pstrlen >= 0 && data.remaining() == Handshake.BASE_HANDSHAKE_LENGTH) {
 			try {
 				logger.trace("Got a handshake on channel {}", socketChannel);
 				Handshake hs = this.validateHandshake(socketChannel, data.array(), null);
