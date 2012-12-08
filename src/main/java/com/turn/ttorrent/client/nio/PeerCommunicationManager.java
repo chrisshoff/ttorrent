@@ -5,6 +5,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.ByteBuffer;
+import java.nio.channels.CancelledKeyException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
@@ -91,7 +92,13 @@ public class PeerCommunicationManager extends Thread {
 									this.fireBadSocketListeners(change.socket);
 									break;
 								}
-								key.interestOps(change.ops);
+								try {
+									key.interestOps(change.ops);
+								} catch (CancelledKeyException e) {
+									logger.warn("Selection key is reporting as cancelled. This is a bad socket - tell the client to stop using it", e);
+									key.cancel();
+									this.fireBadSocketListeners(change.socket);
+								}
 								break;
 							case ChangeRequest.REGISTER:
 								change.socket.register(this.selector, change.ops, change.additionalData);

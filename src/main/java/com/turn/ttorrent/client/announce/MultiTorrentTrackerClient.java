@@ -96,7 +96,7 @@ public abstract class MultiTorrentTrackerClient {
 		// Do nothing by default, but can be overloaded.
 	}
 	
-	protected void addTorrent(ClientSharedTorrent torrent) {
+	protected synchronized void addTorrent(ClientSharedTorrent torrent) {
 		this.torrents.add(torrent);
 	}
 

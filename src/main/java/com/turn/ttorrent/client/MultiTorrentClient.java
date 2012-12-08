@@ -209,6 +209,11 @@ public class MultiTorrentClient implements
 				logger.error("There was a problem validating the handshake.", e);
 			}
 		} else {
+			if (tpw == null) {
+				// We got a message on a socket channel with no torrent or peer associated with it
+				// We have to ignore it as we have no idea what to do with it
+				return;
+			}
 			if (tpw.peer != null) {
 
 				SharingPeer peer = tpw.peer;
@@ -411,6 +416,7 @@ public class MultiTorrentClient implements
 		}
 		
 		socketChannelMap.remove(peer.getSocketChannel());
+		torrentPeerAssociations.remove(peer.getSocketChannel());
 	
 		peer.reset();
 	}
