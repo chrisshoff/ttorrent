@@ -1068,4 +1068,10 @@ public class Client extends Observable implements Runnable,
 
 	@Override
 	public void handleNewData(SocketChannel s, List<ByteBuffer> data) { /* Do nothing */ }
+
+	@Override
+	public void handleBadSocket(SocketChannel s) {
+		// TODO Auto-generated method stub
+		
+	}
 }

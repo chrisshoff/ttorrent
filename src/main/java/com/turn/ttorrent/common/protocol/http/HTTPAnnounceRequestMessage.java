@@ -15,14 +15,6 @@
  */
 package com.turn.ttorrent.common.protocol.http;
 
-import com.turn.ttorrent.bcodec.BDecoder;
-import com.turn.ttorrent.bcodec.BEValue;
-import com.turn.ttorrent.bcodec.BEncoder;
-import com.turn.ttorrent.bcodec.InvalidBEncodingException;
-import com.turn.ttorrent.common.Peer;
-import com.turn.ttorrent.common.Torrent;
-import com.turn.ttorrent.common.protocol.TrackerMessage.AnnounceRequestMessage;
-
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
@@ -31,6 +23,15 @@ import java.net.URLEncoder;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
+
+import com.turn.ttorrent.bcodec.BDecoder;
+import com.turn.ttorrent.bcodec.BEValue;
+import com.turn.ttorrent.bcodec.BEncoder;
+import com.turn.ttorrent.bcodec.InvalidBEncodingException;
+import com.turn.ttorrent.client.ClientSharedTorrent;
+import com.turn.ttorrent.common.Peer;
+import com.turn.ttorrent.common.Torrent;
+import com.turn.ttorrent.common.protocol.TrackerMessage.AnnounceRequestMessage;
 
 
 /**
@@ -57,12 +58,14 @@ public class HTTPAnnounceRequestMessage extends HTTPTrackerMessage
 	private final boolean noPeerId;
 	private final RequestEvent event;
 	private final int numWant;
+	private final ClientSharedTorrent torrent;
 
-	private HTTPAnnounceRequestMessage(ByteBuffer data,
+	private HTTPAnnounceRequestMessage(ClientSharedTorrent torrent, ByteBuffer data,
 		byte[] infoHash, Peer peer, long uploaded, long downloaded,
 		long left, boolean compact, boolean noPeerId, RequestEvent event,
 		int numWant) {
 		super(Type.ANNOUNCE_REQUEST, data);
+		this.torrent = torrent;
 		this.infoHash = infoHash;
 		this.peer = peer;
 		this.downloaded = downloaded;
@@ -252,7 +255,7 @@ public class HTTPAnnounceRequestMessage extends HTTPTrackerMessage
 					.getString(Torrent.BYTE_ENCODING));
 			}
 
-			return new HTTPAnnounceRequestMessage(data, infoHash,
+			return new HTTPAnnounceRequestMessage(null, data, infoHash,
 				new Peer(ip, port, ByteBuffer.wrap(peerId)),
 				downloaded, uploaded, left, compact, noPeerId,
 				event, numWant);
@@ -262,7 +265,7 @@ public class HTTPAnnounceRequestMessage extends HTTPTrackerMessage
 		}
 	}
 
-	public static HTTPAnnounceRequestMessage craft(byte[] infoHash,
+	public static HTTPAnnounceRequestMessage craft(ClientSharedTorrent torrent, byte[] infoHash,
 		byte[] peerId, int port, long uploaded, long downloaded, long left,
 		boolean compact, boolean noPeerId, RequestEvent event,
 		String ip, int numWant)
@@ -293,8 +296,12 @@ public class HTTPAnnounceRequestMessage extends HTTPTrackerMessage
 		}
 
 		return new HTTPAnnounceRequestMessage(
-			BEncoder.bencode(params),
+			torrent, BEncoder.bencode(params),
 			infoHash, new Peer(ip, port, ByteBuffer.wrap(peerId)),
 			uploaded, downloaded, left, compact, noPeerId, event, numWant);
+	}
+
+	public ClientSharedTorrent getTorrent() {
+		return torrent;
 	}
 }

@@ -114,12 +114,12 @@ public class MultiTorrentClient implements
 			(short)this.service.getAddress().getPort(),
 			ByteBuffer.wrap(id.getBytes(Torrent.BYTE_ENCODING)), server);
 		
+		this.server = server;
+		
 		// Initialize the announce request thread, and register ourselves to it
 		// as well.
-		this.announce = new MultiTorrentAnnounce(this.self);
+		this.announce = new MultiTorrentAnnounce(this.self, this.server);
 		this.announce.register(this);
-		
-		this.server = server;
 		
 		start();
 	}
@@ -137,7 +137,8 @@ public class MultiTorrentClient implements
 			alreadyShared = true;
 		}
 		this.torrents.put(torrent.getHexInfoHash(), torrent);
-		if (!alreadyShared) {
+		// Only add this if it's not already shared, or this is the server (where we remove tracked torrents that aren't actively being shared)
+		if (!alreadyShared || this.server) {
 			this.announce.addTorrent(torrent);
 		}
 	}

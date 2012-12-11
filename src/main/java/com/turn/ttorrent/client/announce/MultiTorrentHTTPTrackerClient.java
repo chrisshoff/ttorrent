@@ -45,6 +45,8 @@ import com.turn.ttorrent.common.protocol.http.HTTPTrackerMessage;
  * @see <a href="http://wiki.theory.org/BitTorrentSpecification#Tracker_Request_Parameters">BitTorrent tracker request specification</a>
  */
 public class MultiTorrentHTTPTrackerClient extends MultiTorrentTrackerClient {
+	
+	protected boolean server;
 
 	protected static final Logger logger =
 		LoggerFactory.getLogger(MultiTorrentHTTPTrackerClient.class);
@@ -55,8 +57,9 @@ public class MultiTorrentHTTPTrackerClient extends MultiTorrentTrackerClient {
 	 * @param torrent The torrent we're announcing about.
 	 * @param peer Our own peer specification.
 	 */
-	protected MultiTorrentHTTPTrackerClient(Peer peer) {
+	protected MultiTorrentHTTPTrackerClient(Peer peer, boolean server) {
 		super(peer);
+		this.server = server;
 	}
 
 	/**
@@ -100,6 +103,18 @@ public class MultiTorrentHTTPTrackerClient extends MultiTorrentTrackerClient {
 				HTTPTrackerMessage message =
 					HTTPTrackerMessage.parse(ByteBuffer.wrap(baos.toByteArray()));
 				this.handleTrackerAnnounceResponse(message, inhibitEvents, request.getHexInfoHash());
+				
+				if (this.server) {
+					// This is the server - we don't want to make it keep announcing if it doesn't need to
+					ClientSharedTorrent torrent = request.getTorrent();
+					if (torrent.getAnnounces() == 0) {
+						// This torrent has been announced as much as it needs to - remove it
+						this.torrents.remove(request.getTorrent().getId());
+					} else {
+						// Decrease the announce count 
+						this.torrents.get(request.getTorrent().getId()).setAnnounces(torrent.getAnnounces() - 1);
+					}
+				}
 			}
 		} catch (MalformedURLException mue) {
 			throw new AnnounceException("Invalid announce URL (" +
@@ -141,9 +156,10 @@ public class MultiTorrentHTTPTrackerClient extends MultiTorrentTrackerClient {
 			MessageValidationException {
 		// Build announce request messages
 		List<HTTPAnnounceRequestMessage> messages = new ArrayList<HTTPAnnounceRequestMessage>();
-		for (ClientSharedTorrent torrent : this.torrents) {
+		for (ClientSharedTorrent torrent : this.torrents.values()) {
 			messages.add(
 					HTTPAnnounceRequestMessage.craft(
+					torrent,
 					torrent.getInfoHash(),
 					this.peer.getPeerId().array(),
 					this.peer.getPort(),
@@ -157,5 +173,13 @@ public class MultiTorrentHTTPTrackerClient extends MultiTorrentTrackerClient {
 		}
 		
 		return messages;
+	}
+
+	public boolean isServer() {
+		return server;
+	}
+
+	public void setServer(boolean server) {
+		this.server = server;
 	}
 }

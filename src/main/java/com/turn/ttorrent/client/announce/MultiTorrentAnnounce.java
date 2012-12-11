@@ -68,10 +68,10 @@ public class MultiTorrentAnnounce implements Runnable {
 	 * @throws UnknownServiceException 
 	 * @throws UnknownHostException 
 	 */
-	public MultiTorrentAnnounce(Peer peer) throws UnknownHostException, UnknownServiceException {
+	public MultiTorrentAnnounce(Peer peer, boolean server) throws UnknownHostException, UnknownServiceException {
 		this.peer = peer;
 		this.thread = null;
-		this.trackerClient = this.createTrackerClient(peer);
+		this.trackerClient = this.createTrackerClient(peer, server);
 	}
 	
 	/**
@@ -242,11 +242,11 @@ public class MultiTorrentAnnounce implements Runnable {
 	 * @throws UnknownHostException If the tracker address is invalid.
 	 * @throws UnknownServiceException If the tracker protocol is not supported.
 	 */
-	private MultiTorrentTrackerClient createTrackerClient(Peer peer) throws UnknownHostException, UnknownServiceException {
+	private MultiTorrentTrackerClient createTrackerClient(Peer peer, boolean server) throws UnknownHostException, UnknownServiceException {
 		String scheme = "http";
 
 		if ("http".equals(scheme) || "https".equals(scheme)) {
-			return new MultiTorrentHTTPTrackerClient(peer);
+			return new MultiTorrentHTTPTrackerClient(peer, server);
 		}/* else if ("udp".equals(scheme)) {
 			return new UDPTrackerClient(torrent, peer, tracker);
 		}*/

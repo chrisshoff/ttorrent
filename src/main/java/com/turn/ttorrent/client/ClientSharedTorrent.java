@@ -41,7 +41,10 @@ public class ClientSharedTorrent extends SharedTorrent {
 	private String id;
 	private boolean serverShared;
 	private boolean clientDownloaded;
-
+	
+	// This is used to determine the number of times
+	// we've announced on the server. We stop after this gets to 0.
+	private int announces = 2;
 	
 	public ClientSharedTorrent(Torrent torrent, File destDir, boolean multiThreadHash, boolean seeder)
 			throws FileNotFoundException, IOException, NoSuchAlgorithmException {
@@ -424,5 +427,13 @@ public class ClientSharedTorrent extends SharedTorrent {
 
 	public void setClientDownloaded(boolean clientDownloaded) {
 		this.clientDownloaded = clientDownloaded;
+	}
+
+	public int getAnnounces() {
+		return announces;
+	}
+
+	public void setAnnounces(int announces) {
+		this.announces = announces;
 	}
 }

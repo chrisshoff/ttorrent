@@ -144,6 +144,7 @@ public class HTTPTrackerClient extends TrackerClient {
 			MessageValidationException {
 		// Build announce request message
 		return HTTPAnnounceRequestMessage.craft(
+				null,
 				this.torrent.getInfoHash(),
 				this.peer.getPeerId().array(),
 				this.peer.getPort(),
